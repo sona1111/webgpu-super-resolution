@@ -32,4 +32,7 @@ async function main(){
     console.log(result); // m*n row-major matrix (Float32Array)
 }
 
+//const modelWeights = await getModelWeights("ESRGAN/small");
+//console.log(modelWeights);
+
 //main();

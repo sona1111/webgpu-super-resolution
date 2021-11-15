@@ -24,7 +24,9 @@ function makeRequest(method, url, responsetype) {
     });
 }
 
-async function getModelWeights(url){
+async function downloadModelWeights(url){
+
+
 
     let result = await makeRequest("GET", `${url}/modelinfo.json`, 'json');
 
@@ -38,6 +40,8 @@ async function getModelWeights(url){
         layerdata[layer] = {'w': weights, 'b': bias};
 
     }
+
+    return layerdata;
 
     // var oReq = new XMLHttpRequest();
     // oReq.open("GET", url, true);
@@ -60,4 +64,18 @@ async function getModelWeights(url){
     // oReq.send(null);
 }
 
-getModelWeights("ESRGAN/small");
+async function getModelWeights(name){
+
+    // by default, use local storage for cache
+    const storage = window.localStorage;
+    const alreadyExist = storage.getItem(name);
+    if(alreadyExist){
+        console.log(`using cached ${name}`)
+        return JSON.parse(alreadyExist);
+    }
+
+    const modelWeights = await downloadModelWeights(name);
+    storage.setItem(name, JSON.stringify(modelWeights));
+    return modelWeights;
+}
+
