@@ -8,7 +8,7 @@ import torch.nn as nn
 import json
 import sys
 from PIL import Image
-
+from test_arch_torch import ESRGAN
 
 def make_test_image(path, size):
     im = Image.new(mode="RGB", size=(size, size),
@@ -81,7 +81,7 @@ def conv_fwd(inp, w, b, relu=False):
 
     return output
 
-def rev_relu_fwd(inp1, inp2):
+def rev_relu_fwd(inp1, inp2, add_only=False):
 
     # load to gpu RAM
     # output will be stored in input1
@@ -100,49 +100,38 @@ def rev_relu_fwd(inp1, inp2):
     def __kernRevRelu(y, x, co):
         input1[co, y, x] = (input1[co, y, x] * 0.2) + input2[co, y, x]
 
-    _runKern(__kernRevRelu)
+    def __kernRevReluAddOnly(y, x, co):
+        input1[co, y, x] = (input1[co, y, x]) + input2[co, y, x]
+
+    if add_only:
+        _runKern(__kernRevReluAddOnly)
+    else:
+        _runKern(__kernRevRelu)
 
     return input1
 
+def interpolate_fwd(inp):
 
-class ESRGAN(nn.Module):
-    def __init__(self, in_nc=3, out_nc=3, nf=64, nb=23, gc=32):
-        super(ESRGAN, self).__init__()
+    # load to gpu RAM
+    input = np.zeros(shape=(inp.shape[0], inp.shape[1], inp.shape[2]))
+    output = np.zeros(shape=(inp.shape[0], inp.shape[1]*2, inp.shape[2]*2))
 
+    input[:, :, :] = inp[:, :, :]
 
-        self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB1_conv1 = nn.Conv2d(nf, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB1_conv2 = nn.Conv2d(nf + gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB1_conv3 = nn.Conv2d(nf + 2 * gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB1_conv4 = nn.Conv2d(nf + 3 * gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB1_conv5 = nn.Conv2d(nf + 4 * gc, nf, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB2_conv1 = nn.Conv2d(nf, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB2_conv2 = nn.Conv2d(nf + gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB2_conv3 = nn.Conv2d(nf + 2 * gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB2_conv4 = nn.Conv2d(nf + 3 * gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB2_conv5 = nn.Conv2d(nf + 4 * gc, nf, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB3_conv1 = nn.Conv2d(nf, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB3_conv2 = nn.Conv2d(nf + gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB3_conv3 = nn.Conv2d(nf + 2 * gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB3_conv4 = nn.Conv2d(nf + 3 * gc, gc, 3, 1, 1, bias=True)
-        self.RRDB_trunk_22_RDB3_conv5 = nn.Conv2d(nf + 4 * gc, nf, 3, 1, 1, bias=True)
-        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+    def _runKern(_kern, *_args):
+        for co in range(input.shape[0]):
+            for y in range(input.shape[1]):
+                for x in range(input.shape[2]):
+                    _kern(y, x, co, *_args)
 
+    def __kernInterp(y, x, co):
+        output[co, y*2, x*2] = input[co, y, x]
+        output[co, (y*2)+1, x*2] = input[co, y, x]
+        output[co, y*2, (x*2)+1] = input[co, y, x]
+        output[co, (y*2)+1, (x*2)+1] = input[co, y, x]
 
-
-    def forward(self, x):
-        fea = self.conv_first(x)
-
-        x_o = fea
-
-        x1 = self.lrelu(self.RRDB_trunk_22_RDB1_conv1(x_o))
-        x2 = self.lrelu(self.RRDB_trunk_22_RDB1_conv2(torch.cat((x_o, x1), 1)))
-        x3 = self.lrelu(self.RRDB_trunk_22_RDB1_conv3(torch.cat((x_o, x1, x2), 1)))
-        x4 = self.lrelu(self.RRDB_trunk_22_RDB1_conv4(torch.cat((x_o, x1, x2, x3), 1)))
-        x5 = self.RRDB_trunk_22_RDB1_conv5(torch.cat((x_o, x1, x2, x3, x4), 1))
-        x = x5 * 0.2 + x_o
-        return x
-
+    _runKern(__kernInterp)
+    return output
 
 model = ESRGAN()
 model.eval()
@@ -163,19 +152,590 @@ def esrgan(x):
         _out = rev_relu_fwd(inp1, inp2)
         return _out
 
-
-
     fea = eval_conv('conv_first', x)
 
     x_o = fea
 
+    #----------------
+    x1 = eval_conv('RRDB_trunk_0_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_0_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_0_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_0_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_0_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_0_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_0_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_0_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_0_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_0_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_0_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_0_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_0_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_0_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_0_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_1_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_1_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_1_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_1_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_1_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_1_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_1_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_1_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_1_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_1_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_1_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_1_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_1_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_1_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_1_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_2_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_2_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_2_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_2_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_2_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_2_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_2_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_2_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_2_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_2_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_2_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_2_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_2_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_2_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_2_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_3_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_3_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_3_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_3_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_3_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_3_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_3_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_3_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_3_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_3_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_3_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_3_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_3_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_3_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_3_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_4_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_4_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_4_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_4_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_4_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_4_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_4_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_4_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_4_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_4_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_4_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_4_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_4_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_4_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_4_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_5_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_5_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_5_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_5_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_5_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_5_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_5_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_5_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_5_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_5_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_5_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_5_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_5_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_5_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_5_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_6_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_6_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_6_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_6_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_6_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_6_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_6_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_6_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_6_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_6_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_6_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_6_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_6_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_6_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_6_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_7_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_7_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_7_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_7_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_7_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_7_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_7_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_7_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_7_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_7_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_7_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_7_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_7_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_7_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_7_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_8_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_8_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_8_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_8_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_8_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_8_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_8_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_8_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_8_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_8_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_8_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_8_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_8_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_8_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_8_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_9_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_9_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_9_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_9_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_9_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_9_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_9_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_9_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_9_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_9_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_9_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_9_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_9_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_9_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_9_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_10_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_10_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_10_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_10_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_10_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_10_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_10_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_10_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_10_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_10_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_10_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_10_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_10_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_10_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_10_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_11_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_11_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_11_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_11_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_11_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_11_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_11_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_11_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_11_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_11_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_11_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_11_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_11_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_11_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_11_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_12_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_12_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_12_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_12_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_12_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_12_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_12_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_12_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_12_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_12_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_12_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_12_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_12_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_12_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_12_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_13_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_13_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_13_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_13_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_13_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_13_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_13_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_13_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_13_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_13_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_13_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_13_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_13_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_13_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_13_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_14_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_14_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_14_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_14_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_14_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_14_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_14_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_14_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_14_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_14_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_14_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_14_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_14_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_14_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_14_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_15_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_15_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_15_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_15_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_15_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_15_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_15_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_15_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_15_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_15_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_15_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_15_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_15_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_15_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_15_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_16_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_16_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_16_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_16_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_16_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_16_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_16_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_16_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_16_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_16_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_16_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_16_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_16_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_16_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_16_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_17_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_17_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_17_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_17_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_17_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_17_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_17_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_17_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_17_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_17_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_17_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_17_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_17_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_17_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_17_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_18_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_18_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_18_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_18_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_18_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_18_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_18_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_18_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_18_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_18_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_18_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_18_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_18_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_18_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_18_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_19_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_19_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_19_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_19_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_19_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_19_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_19_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_19_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_19_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_19_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_19_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_19_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_19_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_19_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_19_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_20_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_20_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_20_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_20_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_20_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_20_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_20_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_20_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_20_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_20_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_20_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_20_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_20_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_20_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_20_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    #----------------
+    x1 = eval_conv('RRDB_trunk_21_RDB1_conv1', x_o, relu=True)
+    x2 = eval_conv('RRDB_trunk_21_RDB1_conv2', (x_o, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_21_RDB1_conv3', (x_o, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_21_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_21_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x_o)
+
+    x1 = eval_conv('RRDB_trunk_21_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_21_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_21_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_21_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_21_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_21_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_21_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_21_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_21_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_21_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+    #----------------
     x1 = eval_conv('RRDB_trunk_22_RDB1_conv1', x_o, relu=True)
     x2 = eval_conv('RRDB_trunk_22_RDB1_conv2', (x_o, x1), relu=True)
     x3 = eval_conv('RRDB_trunk_22_RDB1_conv3', (x_o, x1, x2), relu=True)
     x4 = eval_conv('RRDB_trunk_22_RDB1_conv4', (x_o, x1, x2, x3), relu=True)
     x5 = eval_conv('RRDB_trunk_22_RDB1_conv5', (x_o, x1, x2, x3, x4), relu=False)
     x = eval_rev_relu(x5, x_o)
-    return x
+
+    x1 = eval_conv('RRDB_trunk_22_RDB2_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_22_RDB2_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_22_RDB2_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_22_RDB2_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_22_RDB2_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+
+    x1 = eval_conv('RRDB_trunk_22_RDB3_conv1', x, relu=True)
+    x2 = eval_conv('RRDB_trunk_22_RDB3_conv2', (x, x1), relu=True)
+    x3 = eval_conv('RRDB_trunk_22_RDB3_conv3', (x, x1, x2), relu=True)
+    x4 = eval_conv('RRDB_trunk_22_RDB3_conv4', (x, x1, x2, x3), relu=True)
+    x5 = eval_conv('RRDB_trunk_22_RDB3_conv5', (x, x1, x2, x3, x4), relu=False)
+    x = eval_rev_relu(x5, x)
+    x_o = eval_rev_relu(x, x_o)
+    #----------------
+
+
+    trunk = eval_conv('trunk_conv', x_o, relu=False)
+
+    fea = rev_relu_fwd(fea, trunk, add_only=True)
+
+
+    fea = eval_conv('upconv1', interpolate_fwd(fea), relu=True)
+    fea = eval_conv('upconv2', interpolate_fwd(fea), relu=True)
+    out = eval_conv('conv_last', eval_conv('HRconv', fea, relu=True), relu=False)
+
+    return out
 
 
 make_test_image('test.png', 2)
@@ -189,6 +749,10 @@ print('image shape', img.shape)
 manual_result = esrgan(img[0])
 with torch.no_grad():
     torch_result = model(img).numpy()
+    print('img', img)
+    print('res', torch_result)
+    print('man', manual_result)
+
 
 
 print('------')
@@ -196,4 +760,4 @@ print('manual result shape', manual_result.shape)
 print('------')
 print('torch result shape', torch_result.shape)
 print('------')
-print('yay?', np.allclose(manual_result, torch_result[0], atol=1E-7))
+print('yay?', np.allclose(manual_result, torch_result[0], atol=1E-5))
