@@ -41,5 +41,5 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
     }
     result = result + inputBias.numbers[global_id.z];
     let index = global_id.z * u32(inputImage.size.z) * u32(inputImage.size.w) + global_id.y * u32(inputImage.size.w) + global_id.x;
-    resultImage.numbers[index] = result; 
+    resultImage.numbers[index] = result;
 }
