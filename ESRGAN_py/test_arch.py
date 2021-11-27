@@ -24,13 +24,26 @@ def load_image_as_torch(path):
     img_LR = img.unsqueeze(0)
     return img_LR
 
+def vstack(mats):
+    total_first_dim = 0
+    for mat in mats:
+        total_first_dim += mat.shape[0]
+    new_shape = (total_first_dim, mats[0].shape[1], mats[0].shape[2])
+    new_mat = np.empty(new_shape)
+    first_dim = 0
+    for mat in mats:
+        new_mat[first_dim:first_dim+mat.shape[0], :, :] =
+
 def conv_fwd(inp, w, b, relu=False):
     """
     Assumes padding=3, stride=1, kernsize=3
     inp may be either one tensor, or multiple which should be stacked
     """
     if type(inp) == tuple:
+        print(inp[0].shape)
         inp = np.vstack(inp)
+        print(inp.shape)
+        assert False
 
 
     output = np.zeros(shape=(w.shape[0], inp.shape[1], inp.shape[2]))

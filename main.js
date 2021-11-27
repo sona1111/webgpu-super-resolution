@@ -35,25 +35,7 @@
 //const modelWeights = await getModelWeights("ESRGAN/small");
 //console.log(modelWeights);
 
-function getImgDataFromImgElem(imgElem){
-    const canvas = document.createElement('canvas');
-    console.log(imgElem.width)
-    canvas.width = imgElem.width;
-    canvas.height = imgElem.height;
-    canvas.getContext('2d').drawImage(imgElem, 0, 0, imgElem.width, imgElem.height);
-    const pixelData = canvas.getContext('2d').getImageData(0, 0, imgElem.width, imgElem.height).data;
-    const r = new Float32Array(pixelData.length/4);
-    const g = new Float32Array(pixelData.length/4);
-    const b = new Float32Array(pixelData.length/4);
-    let j=0;
-    for(let i=0;i<pixelData.length;i+=4){
-        r[j]=pixelData[i];
-        g[j]=pixelData[i+1];
-        b[j]=pixelData[i+2];
-        j++;
-    }
-    return [r, g, b];
-}
+
 
 async function main(){
     const adapter = await navigator.gpu.requestAdapter();

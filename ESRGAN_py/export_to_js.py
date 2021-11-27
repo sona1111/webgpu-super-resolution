@@ -19,11 +19,17 @@ def export_js_modelbin(model, path):
 
                  ]}
 
+    cur_layer = {}
     for name in model.state_dict():
+        l = model.state_dict()[name]
         if name.endswith('weight'):
+            cur_layer['name'] = name.replace('.weight', '')
+            cur_layer['wshape'] = list(l.shape)
             continue
 
-        modelinfo['layers'].append(name.replace('.bias', ''))
+        cur_layer['bshape'] = list(l.shape)
+        modelinfo['layers'].append(cur_layer)
+        cur_layer = {}
 
 
     with open(os.path.join(path, 'modelinfo.json'), 'w') as f:

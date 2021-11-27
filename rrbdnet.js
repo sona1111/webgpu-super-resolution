@@ -3,6 +3,10 @@ async function read_shader(path){
     return await conv2dc.text();
 }
 
+
+
+
+
 (async () => {
     if (!navigator.gpu) {
       console.log("WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.");
@@ -15,6 +19,58 @@ async function read_shader(path){
       return;
     }
     const device = await adapter.requestDevice();
+
+    const inp_img = getImgDataFromImgElem(document.getElementById('sm_img'));
+    console.log(inp_img)
+
+    function copy_mat_gpu(floatArr){
+        // get GPU pointer for CPU float32 array and copy data to it
+        const gpuArray = device.createBuffer({
+            mappedAtCreation: true,
+            size: floatArr.byteLength,
+            usage: GPUBufferUsage.STORAGE
+        });
+        const arrayBufferBiasArray = gpuBufferBiasArray.getMappedRange();
+        new Float32Array(arrayBufferBiasArray).set(biasArray);
+        gpuBufferBiasArray.unmap();
+    }
+
+    function get_mat_gpu_output(length){
+        // get GPU pointer for an output array
+        const resultMatrixBufferSize = Float32Array.BYTES_PER_ELEMENT * (4 + length);
+        const resultMatrixBuffer = device.createBuffer({
+            size: resultMatrixBufferSize,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        });
+        return resultMatrixBuffer
+    }
+
+    function vstack(arrs){
+        // stack multiple arrs along first axis
+        let total_first_dim = 0;
+        for(let arr of arrs){
+            total_first_dim += (arr.length / inp_img.w / inp_img.h);
+        }
+        const new_arr = new Float32Array(total_first_dim * inp_img.w * inp_img.h);
+
+        let offset = 0;
+        for(let arr of arrs){
+            new_arr.set(arr, offset);
+            offset += arr.length;
+        }
+        return new_arr;
+
+
+    }
+
+    async function conv_fwd(inp, w, b, relu){
+        if(Array.isArray(inp)){  // not float32 array, standard JS array
+            inp = vstack(inp);
+        }
+
+        const output =  get_mat_gpu_output(w)
+    }
+
 
   
     // First Matrix
