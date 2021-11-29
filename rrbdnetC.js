@@ -188,6 +188,8 @@ async function read_shader(path){
 
     }
 
+    
+
     async function gpuexec_relu(input, inputSize, shaderModule) {
         const computePipeline = device.createComputePipeline({
             compute: {
@@ -223,11 +225,13 @@ async function read_shader(path){
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(firstMatrix[3] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(firstMatrix[2] / 4); // Y dimension of the grid of workgroups to dispatch.
-        const z = Math.ceil(firstMatrix[1] / 4); 
+        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
+        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const z = Math.ceil(matrixSize[0] / 4); 
         passEncoder.dispatch(x, y, z);
         passEncoder.endPass();
+        const gpuCommands = commandEncoder.finish();
+        device.queue.submit([gpuCommands]);
     }
 
     async function gpuexec_readbuf(output, outputsize){
@@ -256,6 +260,65 @@ async function read_shader(path){
         await gpuReadBuffer.mapAsync(GPUMapMode.READ);
         const arrayBuffer = gpuReadBuffer.getMappedRange();
         return new Float32Array(arrayBuffer);
+    }
+
+    async function scale_residual(input, output) {
+        inputSize = [input.length / (inp_img.w * inp_img.h), inp_img.h, inp_img.w];
+        const outputBuff =  copy_mat_gpu(output, Float32Array, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
+        const inputBuff = copy_mat_gpu(input, Float32Array, GPUBufferUsage.STORAGE);
+        const outputsize = Float32Array.BYTES_PER_ELEMENT * ((inputSize[0] * inp_img.w * inp_img.h));
+
+        const shaderModuleScaleRes = device.createShaderModule({
+            code: await read_shader( 'scaleandresidual.wgsl')
+        });
+        const computePipeline = device.createComputePipeline({
+            compute: {
+              module: shaderModuleScaleRes,
+              entryPoint: "main"
+            }
+          });        
+        
+          // Bind group
+          const matrixSize = new Uint32Array(inputSize);
+  
+          const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
+        
+          const bindGroup = device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0 /* index */),
+            entries: [
+              {
+                binding: 0,
+                resource: {
+                  buffer: inputBuff
+                }
+              },
+              {
+                binding: 1,
+                resource: {
+                    buffer: outputBuff
+                }
+              },
+              {
+                binding: 2,
+                resource: {
+                    buffer: unifbuffer
+                }
+              }
+            ]
+          });
+        const commandEncoder = device.createCommandEncoder();
+  
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(computePipeline);
+        passEncoder.setBindGroup(0, bindGroup);
+        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
+        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const z = Math.ceil(matrixSize[0] / 4); 
+        passEncoder.dispatch(x, y, z);
+        passEncoder.endPass();
+        const gpuCommands = commandEncoder.finish();
+        device.queue.submit([gpuCommands]);
+        return await gpuexec_readbuf(outputBuff, outputsize);
     }
 
     async function conv_fwd(inp, w, wshape, b, bshape, relu){
@@ -319,8 +382,22 @@ async function read_shader(path){
             );
         }
 
-        let fea = await eval_conv('conv_first', inp_img.c, true);
-        console.log(fea);
+        let fea = await eval_conv('conv_first', inp_img.c, false);
+        let rrdb_in = fea;
+        for (let rrdb_chunk = 0; rrdb_chunk < 23; rrdb_chunk++) {
+            let rdb_in = rrdb_in;
+            for (let rdb = 1; rdb <= 3; rdb ++) {
+                let rdb_x1 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv1', rdb_in, true)
+                let rbd_x2 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv2', vstack([rdb_in, rdb_x1]), true)
+                let rbd_x3 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv3', vstack([rdb_in, rdb_x1, rbd_x2]), true)
+                let rbd_x4 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv4', vstack([rdb_in, rdb_x1, rbd_x2, rbd_x3]), true)
+                let rbd_x5 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv5', vstack([rdb_in, rdb_x1, rbd_x2, rbd_x3, rbd_x4]), false)
+                rdb_in = await scale_residual(rdb_in, rbd_x5);
+            }
+            rrdb_in = await scale_residual(rrdb_in, rdb_in)
+        }
+        trunk = await eval_conv('trunk_conv', rrdb_in, false);
+        console.log(trunk)
         return fea;
 
     }

@@ -7,4 +7,5 @@ There is a potential bug of i32 and u32 for global id
 Does wgsl support loop unrolling?
 Webgpu documntation incomplete for command encoders pipelines etc.
 Add package.json
-Is there any issue with adding bias?
+Put the loop in GPU
+minimize memmory pingpong between cpu and gpu
