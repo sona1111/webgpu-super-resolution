@@ -33,9 +33,9 @@ function getImgDataFromImgElem(imgElem){
     const color_ch_len = pixelData.length/4;
 
     for(let i=0;i<pixelData.length;i+=4){
-        color[i/4]=pixelData[i]; // red
-        color[(i/4) + color_ch_len]=pixelData[i+1];
-        color[(i/4) + (color_ch_len*2)]=pixelData[i+2];
+        color[i/4]=pixelData[i]/255.0; // red
+        color[(i/4) + color_ch_len]=pixelData[i+1]/255.0;
+        color[(i/4) + (color_ch_len*2)]=pixelData[i+2]/255.0;
 
     }
     return {

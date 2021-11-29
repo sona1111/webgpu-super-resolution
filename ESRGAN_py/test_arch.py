@@ -9,6 +9,7 @@ import json
 import sys
 from PIL import Image
 from test_arch_torch import ESRGAN
+from collections import OrderedDict
 
 def make_test_image(path, size):
     im = Image.new(mode="RGB", size=(size, size),
@@ -24,15 +25,15 @@ def load_image_as_torch(path):
     img_LR = img.unsqueeze(0)
     return img_LR
 
-def vstack(mats):
-    total_first_dim = 0
-    for mat in mats:
-        total_first_dim += mat.shape[0]
-    new_shape = (total_first_dim, mats[0].shape[1], mats[0].shape[2])
-    new_mat = np.empty(new_shape)
-    first_dim = 0
-    for mat in mats:
-        new_mat[first_dim:first_dim+mat.shape[0], :, :] =
+# def vstack(mats):
+#     total_first_dim = 0
+#     for mat in mats:
+#         total_first_dim += mat.shape[0]
+#     new_shape = (total_first_dim, mats[0].shape[1], mats[0].shape[2])
+#     new_mat = np.empty(new_shape)
+#     first_dim = 0
+#     for mat in mats:
+#         new_mat[first_dim:first_dim+mat.shape[0], :, :] =
 
 def conv_fwd(inp, w, b, relu=False):
     """
@@ -50,21 +51,34 @@ def conv_fwd(inp, w, b, relu=False):
 
     input = np.zeros(shape=(inp.shape[0], inp.shape[1], inp.shape[2]))
 
-    kern = np.zeros(shape=(w.shape[0], w.shape[1], w.shape[2], w.shape[3]))
+    weight = np.zeros(shape=(w.shape[0], w.shape[1], w.shape[2], w.shape[3]))
     bias = np.zeros(shape=(b.shape[0]))
 
     # load inputs to gpu main memory
     input[:, :, :] = inp[:, :, :]
-    kern[:, :, :, :] = w[:, :, :, :]
+    weight[:, :, :, :] = w[:, :, :, :]
     bias[:] = b[:]
 
     def __kernConvolve(y, x, ci, co):
 
+        dbg_arr = []
+
         for i in [-1, 0, 1]:
             for j in [-1, 0, 1]:
+
+
+
+
+
                 if (y+i < 0 or x+j < 0 or y+i >= input.shape[1] or x+j >= input.shape[2]):
+                    dbg_arr.append(0)
                     continue
-                output[co, y, x] += (input[ci, y+i, x+j] * kern[co, ci, i+1, j+1])
+                kern_idx = (ci * weight.shape[1] * weight.shape[2] * weight.shape[3]) + \
+                           (co * weight.shape[2] * weight.shape[3]) + \
+                           ((i+1) * weight.shape[3]) + (j+1)
+                dbg_arr.append(input[ci, y+i, x+j])
+                output[co, y, x] += (input[ci, y+i, x+j] * weight[co, ci, i+1, j+1])
+
 
     def __kernAddBias(y, x, co):
         output[co, y, x] += bias[co]
@@ -87,11 +101,15 @@ def conv_fwd(inp, w, b, relu=False):
 
             _runKern(__kernConvolve, in_ch_idx, out_ch_idx)
 
+
         if relu:
             _runKern(__kernAddBiasAndRelu, out_ch_idx)
         else:
             _runKern(__kernAddBias, out_ch_idx)
 
+
+    print(output[0:2])
+    assert False
     return output
 
 def rev_relu_fwd(inp1, inp2, add_only=False):
@@ -149,7 +167,28 @@ def interpolate_fwd(inp):
 model = ESRGAN()
 model.eval()
 
-nn.init.constant_(model.conv_first.bias, 0.01)
+if False:
+    nn.init.constant_(model.conv_first.bias, 0.01)
+else:
+    state_dict = torch.load('models/RRDB_ESRGAN_x4.pth')
+
+    def change_key(old, new, od):
+        d2 = OrderedDict([(new, v) if k == old else (k, v) for k, v in od.items()])
+        return d2
+
+    def dots_to_underscores(_new_model_state):
+        new_model_state = _new_model_state
+        keys = list(new_model_state.keys())
+        for key in keys:
+            if key.startswith('RRDB_trunk'):
+                parts = key.split('.')
+                new_key = '_'.join(parts[:-1]) + '.' + parts[-1]
+                new_model_state = change_key(key, new_key, new_model_state)
+        return new_model_state
+
+    new_state = dots_to_underscores(state_dict)
+
+    model.load_state_dict(new_state, strict=True)
 
 def esrgan(x):
 
@@ -168,6 +207,8 @@ def esrgan(x):
     fea = eval_conv('conv_first', x)
 
     x_o = fea
+    print(x_o.shape)
+    assert False
 
     #----------------
     x1 = eval_conv('RRDB_trunk_0_RDB1_conv1', x_o, relu=True)
@@ -755,7 +796,7 @@ make_test_image('test.png', 2)
 img = load_image_as_torch('test.png')
 #img = img[:, :1, :, :]
 
-#img = load_image_as_torch('4x4.png')
+img = load_image_as_torch('../3x2.png')
 
 print('image shape', img.shape)
 
