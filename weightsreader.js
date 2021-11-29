@@ -24,24 +24,16 @@ function makeRequest(method, url, responsetype) {
     });
 }
 
-async function downloadModelWeights(url){
+async function downloadLayerWeights(url, layer){
 
 
+    // note, theoretically with this model we would start to evaluate the earlier layers before
+    // the later ones are downloaded
+    let weights = new Float32Array(await makeRequest("GET", `${url}/${layer.name}.weight.bin`, 'arraybuffer'));
+    let bias = new Float32Array(await makeRequest("GET", `${url}/${layer.name}.bias.bin`, 'arraybuffer'));
 
-    let result = await makeRequest("GET", `${url}/modelinfo.json`, 'json');
 
-    const layerdata = {}
-
-    for (let layer of result.layers){
-        // note, theoretically with this model we would start to evaluate the earlier layers before
-        // the later ones are downloaded
-        let weights = new Float32Array(await makeRequest("GET", `${url}/${layer}.weight.bin`, 'arraybuffer'));
-        let bias = new Float32Array(await makeRequest("GET", `${url}/${layer}.bias.bin`, 'arraybuffer'));
-        layerdata[layer] = {'w': weights, 'b': bias};
-
-    }
-
-    return layerdata;
+    return {'w': weights, 'b': bias, 'wshape':layer.wshape, 'bshape':layer.bshape};
 
     // var oReq = new XMLHttpRequest();
     // oReq.open("GET", url, true);
@@ -64,18 +56,41 @@ async function downloadModelWeights(url){
     // oReq.send(null);
 }
 
-async function getModelWeights(name){
+function getLDBAsync(key) {
+    return new Promise(function(resolve, reject) {
+        ldb.get(key, function(data){
+            resolve(data);
+        });
+    });
+}
+
+async function getModelData(url){
+
+    let meta = await makeRequest("GET", `${url}/modelinfo.json`, 'json');
 
     // by default, use local storage for cache
-    const storage = window.localStorage;
-    const alreadyExist = storage.getItem(name);
-    if(alreadyExist){
-        console.log(`using cached ${name}`)
-        return JSON.parse(alreadyExist);
+    const result = {};
+
+    for(let layer of meta.layers){
+        const alreadyExist = await getLDBAsync(`${url}/${layer.name}`);
+        if(alreadyExist){
+            console.log(`using cached ${url}/${layer.name}`)
+            result[layer.name] = JSON.parse(alreadyExist);
+            result[layer.name].w = new Float32Array(Object.values(result[layer.name].w));
+            result[layer.name].b = new Float32Array(Object.values(result[layer.name].b));
+            continue;
+        }
+
+        const layerWeights = await downloadLayerWeights(url, layer);
+        result[layer.name] = layerWeights;
+        try{
+            ldb.set(`${url}/${layer.name}`, JSON.stringify(layerWeights));
+            console.log(`Stored ${url} to localstorage`);
+        }catch (error){
+            console.log(`UNABLE to store ${url} to localstorage`);
+        }
     }
 
-    const modelWeights = await downloadModelWeights(name);
-    storage.setItem(name, JSON.stringify(modelWeights));
-    return modelWeights;
+    return result;
 }
 
