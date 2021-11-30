@@ -56,10 +56,10 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
     //resultImage.size = vec4<f32>(inputImage.size.x, inputImage.size.y, 2.f * inputImage.size.z, 2.f * inputImage.size.w);
     let index = global_id.z * u32(ufs.inputSizes.z) * u32(ufs.inputSizes.y) + global_id.y * u32(ufs.inputSizes.z) + global_id.x;
     var result = inputImage.numbers[index];
-    let channel_area = 4u * ufs.inputSizes.z ufs.inputSizes.y;
+    let channel_area = 4u * ufs.inputSizes.z * ufs.inputSizes.y;
     let result_width = 2u * ufs.inputSizes.z;
-    let index1 = global_id.z * channel_area + global_id.y * 2u * result_width; + 2u * global_id.x;
-    let index2 = global_id.z * channel_area + global_id.y * 2u * result_width; + 2u * global_id.x + 1u;
+    let index1 = global_id.z * channel_area + global_id.y * 2u * result_width + 2u * global_id.x;
+    let index2 = global_id.z * channel_area + global_id.y * 2u * result_width + 2u * global_id.x + 1u;
     let index3 = global_id.z * channel_area + (global_id.y * 2u + 1u)* result_width + 2u * global_id.x;
     let index4 = global_id.z * channel_area + (global_id.y * 2u + 1u)* result_width + 2u * global_id.x + 1u;
     resultImage.numbers[index1] = result; 

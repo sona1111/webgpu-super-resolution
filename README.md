@@ -9,3 +9,13 @@ Webgpu documntation incomplete for command encoders pipelines etc.
 Add package.json
 Put the loop in GPU
 minimize memmory pingpong between cpu and gpu
+
+Performance Analysis
+Image size vs Run time
+Webgpu vs pytorch on same machine
+
+Wrapper for 2d convolution
+interpolation layer 
+relu layer with webgpu
+
+Use the same buffer/uniform for matrix size?

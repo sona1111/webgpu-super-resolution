@@ -120,7 +120,7 @@ async function read_shader(path){
             }
         });
 
-        let aux_arr = [in_ch_idx, out_ch_idx, inp_img.w, inp_img.h].concat(inputshape).concat(weightshape)
+        let aux_arr = [in_ch_idx, out_ch_idx, inputshape[1], inputshape[2]].concat(inputshape).concat(weightshape)
         const channelIdxs = new Int32Array(aux_arr);
 
         const unifbuffer = copy_mat_gpu(channelIdxs, Int32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
@@ -173,7 +173,7 @@ async function read_shader(path){
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
 
-        passEncoder.dispatch(inp_img.w, inp_img.h);
+        passEncoder.dispatch(inputshape[1], inputshape[2]);
         //passEncoder.dispatch(1, 1);
         //passEncoder.dispatch(1, 1, 1);
         passEncoder.endPass();
@@ -380,16 +380,75 @@ async function read_shader(path){
         return await gpuexec_readbuf(outputBuff, outputsize);
     }
 
-    async function conv_fwd(inp, w, wshape, b, bshape, relu){
+    async function up_resolution(input, input_shape) {
+        inputSize = [input.length / (input_shape[0] * input_shape[1]), input_shape[0], input_shape[1]];
+        const outputBuff =  get_mat_gpu_output(4 * inputSize[0] * input_shape[0] * input_shape[1]);
+        const inputBuff = copy_mat_gpu(input, Float32Array, GPUBufferUsage.STORAGE);
+        const outputsize = Float32Array.BYTES_PER_ELEMENT * ((4 * inputSize[0] * input_shape[0] * input_shape[1]));
+
+        const shaderModuleInterpolate = device.createShaderModule({
+            code: await read_shader( 'interpolate.wgsl')
+        });
+        const computePipeline = device.createComputePipeline({
+            compute: {
+              module: shaderModuleInterpolate,
+              entryPoint: "main"
+            }
+          });        
+        
+          // Bind group
+          const matrixSize = new Uint32Array(inputSize);
+  
+          const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
+        
+          const bindGroup = device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0 /* index */),
+            entries: [
+              {
+                binding: 0,
+                resource: {
+                  buffer: inputBuff
+                }
+              },
+              {
+                binding: 1,
+                resource: {
+                    buffer: outputBuff
+                }
+              },
+              {
+                binding: 2,
+                resource: {
+                    buffer: unifbuffer
+                }
+              }
+            ]
+          });
+        const commandEncoder = device.createCommandEncoder();
+  
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(computePipeline);
+        passEncoder.setBindGroup(0, bindGroup);
+        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
+        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const z = Math.ceil(matrixSize[0] / 4); 
+        passEncoder.dispatch(x, y, z);
+        passEncoder.endPass();
+        const gpuCommands = commandEncoder.finish();
+        device.queue.submit([gpuCommands]);
+        return await gpuexec_readbuf(outputBuff, outputsize);
+    }
+
+    async function conv_fwd(inp, inp_shape, w, wshape, b, bshape, relu){
         if(Array.isArray(inp)){  // not float32 array, standard JS array
             inp = vstack(inp);
         }
-        console.log('output size', wshape[0] * inp_img.w * inp_img.h) // Need to change this to be more generic
-        const output =  get_mat_gpu_output(wshape[0] * inp_img.w * inp_img.h);
+        console.log('output size', wshape[0] * inp_shape[0] * inp_shape[1]) // Need to change this to be more generic
+        const output =  get_mat_gpu_output(wshape[0] * inp_shape[0] * inp_shape[1]);
         const input = copy_mat_gpu(inp, Float32Array, GPUBufferUsage.STORAGE);
         const weight = copy_mat_gpu(w, Float32Array, GPUBufferUsage.STORAGE);
         const bias = copy_mat_gpu(b, Float32Array, GPUBufferUsage.STORAGE);
-        const outputsize = Float32Array.BYTES_PER_ELEMENT * ((wshape[0] * inp_img.w * inp_img.h));
+        const outputsize = Float32Array.BYTES_PER_ELEMENT * ((wshape[0] * inp_shape[0] * inp_shape[1]));
 
 
         const shaderModuleConv = device.createShaderModule({
@@ -404,21 +463,21 @@ async function read_shader(path){
         //console.log(await read_shader( 'conv2d_norelu.wgsl'))
 
         console.log(output, input, weight, bias);
-        const in_ch_count = inp.length / (inp_img.w * inp_img.h);
+        const in_ch_count = inp.length / (inp_shape[0] * inp_shape[1]);
         for(let out_ch_idx=0; out_ch_idx<wshape[0]; out_ch_idx++){
             for(let in_ch_idx=0; in_ch_idx<in_ch_count; in_ch_idx++){
-                await gpuexec_conv(output, input, [in_ch_count, inp_img.w, inp_img.h],
+                await gpuexec_conv(output, input, [in_ch_count, inp_shape[1], inp_shape[0]],
                         weight, wshape, bias, in_ch_idx, out_ch_idx, shaderModuleConv)
                     //console.log(res);
 
 
             }
-            await gpuexec_conv(output, input, [in_ch_count, inp_img.w, inp_img.h],
+            await gpuexec_conv(output, input, [in_ch_count, inp_shape[1], inp_shape[0]],
                                weight, wshape, bias, 0, out_ch_idx, shaderModuleAddBias)
 
         }
         if (relu) {
-            await gpuexec_relu(output, [wshape[0], inp_img.h, inp_img.w], shaderModuleReLU)
+            await gpuexec_relu(output, [wshape[0], inp_shape[0], inp_shape[1]], shaderModuleReLU)
         }
 
 
@@ -429,10 +488,11 @@ async function read_shader(path){
     async function esrgan(){
 
 
-        async function eval_conv(name, inp, relu){
+        async function eval_conv(name, inp, inp_shape, relu){
             console.log(modeldata[name])
             return await conv_fwd(
                 inp,
+                inp_shape,
                 modeldata[name].w,
                 modeldata[name].wshape,
                 modeldata[name].b,
@@ -441,28 +501,35 @@ async function read_shader(path){
             );
         }
 
-        let fea = await eval_conv('conv_first', inp_img.c, false);
+        let fea = await eval_conv('conv_first', inp_img.c, [inp_img.h, inp_img.w], false);
         let rrdb_in = fea;
         console.log(fea)
         for (let rrdb_chunk = 0; rrdb_chunk < 23; rrdb_chunk++) {
             let rdb_in = rrdb_in;
             for (let rdb = 1; rdb <= 3; rdb ++) {
-                let rdb_x1 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv1', rdb_in, true)
+                let rdb_x1 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv1', rdb_in, [inp_img.h, inp_img.w], true)
                 // console.log(rdb_x1)
-                let rbd_x2 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv2', vstack([rdb_in, rdb_x1]), true)
+                let rbd_x2 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv2', vstack([rdb_in, rdb_x1]), [inp_img.h, inp_img.w], true)
                 // console.log(rbd_x2)
-                let rbd_x3 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv3', vstack([rdb_in, rdb_x1, rbd_x2]), true)
-                let rbd_x4 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv4', vstack([rdb_in, rdb_x1, rbd_x2, rbd_x3]), true)
-                let rbd_x5 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv5', vstack([rdb_in, rdb_x1, rbd_x2, rbd_x3, rbd_x4]), false)
+                let rbd_x3 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv3', vstack([rdb_in, rdb_x1, rbd_x2]), [inp_img.h, inp_img.w], true)
+                let rbd_x4 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv4', vstack([rdb_in, rdb_x1, rbd_x2, rbd_x3]), [inp_img.h, inp_img.w], true)
+                let rbd_x5 = await eval_conv('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv5', vstack([rdb_in, rdb_x1, rbd_x2, rbd_x3, rbd_x4]), [inp_img.h, inp_img.w], false)
                 rdb_in = await scale_residual(rdb_in, rbd_x5);
                 // console.log(rdb_in)
             }
             rrdb_in = await scale_residual(rrdb_in, rdb_in)
             // console.log(rrdb_in)
         }
-        trunk = await eval_conv('trunk_conv', rrdb_in, false);
+        trunk = await eval_conv('trunk_conv', rrdb_in, [inp_img.h, inp_img.w], false);
         fea = await matrix_addition(trunk, fea);
-        console.log(trunk)
+        // console.log(fea)
+        fea = await up_resolution(fea, [inp_img.h, inp_img.w]);
+        fea = await eval_conv('upconv1', fea, [2 * inp_img.h, 2 * inp_img.w], true);
+        fea = await up_resolution(fea, [2 * inp_img.h, 2 * inp_img.w]);
+        fea = await eval_conv('upconv2', fea, [4 * inp_img.h, 4 * inp_img.w], true);
+        fea = await eval_conv('HRconv', fea, [4 * inp_img.h, 4 * inp_img.w], true);
+        fea = await eval_conv('conv_last', fea, [4 * inp_img.h, 4 * inp_img.w], false);
+        // console.log(fea)
         return fea;
 
     }
