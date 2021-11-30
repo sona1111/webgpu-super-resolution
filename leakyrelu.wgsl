@@ -42,7 +42,7 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
     }
     let index = global_id.z * ufs.inputSizes.y * ufs.inputSizes.z + global_id.y * ufs.inputSizes.z + global_id.x;
     var result = inputImage.numbers[index];
-    if (result < 0.f) {
+    if (result < 0.) {
         inputImage.numbers[index] = 0.2 * result; 
     }
     

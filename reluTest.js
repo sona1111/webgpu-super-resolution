@@ -51,7 +51,7 @@
         }
         let index = global_id.z * u32(inputImage.size.z) * u32(inputImage.size.w) + global_id.y * u32(inputImage.size.w) + global_id.x;
         var result = inputImage.numbers[index];
-        if (result < 0.f) {
+        if (result < 0.) {
             inputImage.numbers[index] = 0.2 * result; 
         }
         
