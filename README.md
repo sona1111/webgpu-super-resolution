@@ -19,3 +19,6 @@ interpolation layer
 relu layer with webgpu
 
 Use the same buffer/uniform for matrix size?
+
+--max_old_space_size=30000
+
