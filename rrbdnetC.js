@@ -13,7 +13,8 @@ async function read_shader(path){
       return;
     }
   
-    const adapter = await navigator.gpu.requestAdapter();
+    //const adapter = await navigator.gpu.requestAdapter();
+    const adapter = await navigator.gpu.requestAdapter({powerPreference: "high-performance"});
     if (!adapter) {
       console.log("Failed to get GPU adapter.");
       return;
