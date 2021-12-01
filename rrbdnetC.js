@@ -336,7 +336,10 @@ async function read_shader(path){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
-        return await gpuexec_readbuf(outputBuff, outputsize);
+        const res =  await gpuexec_readbuf(outputBuff, outputsize);
+        outputBuff.destroy();
+        inputBuff.destroy();
+        return res;
     }
 
     async function matrix_addition(input, output) {
@@ -393,7 +396,10 @@ async function read_shader(path){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
-        return await gpuexec_readbuf(outputBuff, outputsize);
+        const res = await gpuexec_readbuf(outputBuff, outputsize);
+        outputBuff.destroy();
+        inputBuff.destroy();
+        return res;
     }
 
     async function up_resolution(input, input_shape) {
@@ -450,7 +456,10 @@ async function read_shader(path){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
-        return await gpuexec_readbuf(outputBuff, outputsize);
+        const res = await gpuexec_readbuf(outputBuff, outputsize);
+        outputBuff.destroy();
+        inputBuff.destroy();
+        return res;
     }
 
 
@@ -465,8 +474,6 @@ async function read_shader(path){
         const weight = copy_mat_gpu(w, Float32Array, GPUBufferUsage.STORAGE);
         const bias = copy_mat_gpu(b, Float32Array, GPUBufferUsage.STORAGE);
         const outputsize = Float32Array.BYTES_PER_ELEMENT * ((wshape[0] * inp_shape[0] * inp_shape[1]));
-
-
 
         //console.log(await read_shader( 'conv2d_norelu.wgsl'))
 
@@ -489,7 +496,12 @@ async function read_shader(path){
         }
 
 
-        return await gpuexec_readbuf(output, outputsize);
+        const res = await gpuexec_readbuf(output, outputsize);
+        output.destroy();
+        input.destroy();
+        weight.destroy();
+        bias.destroy();
+        return res;
 
     }
 
