@@ -9,6 +9,8 @@
   outputSizes: array<i32, 2>;
   inputSizes: array<i32, 3>;
   kernSizes: array<i32, 4>;
+  offsetw: u32;
+  offsetb: i32;
 };
 
 [[group(0), binding(0)]] var<storage, read> inputImage : Array;
@@ -54,14 +56,14 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
                                  u32(y+i) * u32(ufs.inputSizes[1]) +
                                  u32(x+j);
                 //resultImage.numbers[dbg_idx] = f32(inputImage.numbers[imageIndex]);
-                result = result + (inputKernel.numbers[kernIndex] * inputImage.numbers[imageIndex]);
+                result = result + (inputKernel.numbers[ufs.offsetw + kernIndex] * inputImage.numbers[imageIndex]);
 
 
             }
         }
     }
 
-    result = result + inputBias.numbers[co];
+    result = result + inputBias.numbers[ufs.offsetb + co];
 
 
 
