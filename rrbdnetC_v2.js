@@ -84,7 +84,7 @@ async function read_shader(path){
         code: await read_shader( 'addition.wgsl')
     });
 
-    async function gpuexec_conv(output, input, inputshape, weight, weightshape, bias, in_ch_idx, shaderModule) {
+    async function gpuexec_conv(output, input, inputshape, weight, weightshape, bias, shaderModule) {
 
         // Pipeline setup
 
@@ -138,7 +138,7 @@ async function read_shader(path){
             }
         });
 
-        let aux_arr = [in_ch_idx, inputshape[1], inputshape[2]].concat(inputshape).concat(weightshape)
+        let aux_arr = [inputshape[1], inputshape[2]].concat(inputshape).concat(weightshape)
         const channelIdxs = new Int32Array(aux_arr);
 
         const unifbuffer = copy_mat_gpu(channelIdxs, Int32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
@@ -478,11 +478,8 @@ async function read_shader(path){
         //console.log(output, input, weight, bias);
         const in_ch_count = inp.length / (inp_shape[0] * inp_shape[1]);
 
-        for(let in_ch_idx=0; in_ch_idx<in_ch_count; in_ch_idx++) {
-            await gpuexec_conv(output, input, [in_ch_count, inp_shape[1], inp_shape[0]],
-                weight, wshape, bias, in_ch_idx, shaderModuleConv);
-
-        }
+        await gpuexec_conv(output, input, [in_ch_count, inp_shape[1], inp_shape[0]],
+            weight, wshape, bias, shaderModuleConv);
 
         if (relu) {
             await gpuexec_relu(output, [wshape[0], inp_shape[0], inp_shape[1]], shaderModuleReLU)
