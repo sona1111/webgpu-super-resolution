@@ -302,7 +302,7 @@ def esrgan(x):
         return _out
 
     fea = eval_conv('conv_first', x, relu=False)
-    return fea
+
 
     rrdb_in = fea
 
@@ -310,15 +310,33 @@ def esrgan(x):
         rdb_in = rrdb_in
         #----------------
         for j in range(1,4):
+
+            # create two buffer of (64+192) called rdb_in
+            #
+            # conv from rdb_in (0-64) to rbd_in (65+=32)
+            # conv from rdb_in (0-64+32) to rdb_in (64+32+=32)
+            # ...
+            # conv from rdb_in (full) to rdb_in2 (0-64)
+            # flip
+
+
             x1 = eval_conv(f'RRDB_trunk_{i}_RDB{j}_conv1', rdb_in, relu=True)
+            #return rdb_in
             x2 = eval_conv(f'RRDB_trunk_{i}_RDB{j}_conv2', (rdb_in, x1), relu=True)
+
+
             x3 = eval_conv(f'RRDB_trunk_{i}_RDB{j}_conv3', (rdb_in, x1, x2), relu=True)
             x4 = eval_conv(f'RRDB_trunk_{i}_RDB{j}_conv4', (rdb_in, x1, x2, x3), relu=True)
             x5 = eval_conv(f'RRDB_trunk_{i}_RDB{j}_conv5', (rdb_in, x1, x2, x3, x4), relu=False)
+            #return x5
             rdb_in = eval_rev_relu(x5, rdb_in)
+            #return rdb_in
 
+
+        #return rrdb_in
         rrdb_in = eval_rev_relu(rdb_in, rrdb_in)
-        return rrdb_in
+        if(i == 1):
+            return rrdb_in
         #----------------
 
 
@@ -349,7 +367,7 @@ with torch.no_grad():
     torch_result = model(img).numpy()
     # print('img', img)
     # print('res', torch_result)
-    print('man', manual_result)
+    print('man', manual_result[0])
 
 
 

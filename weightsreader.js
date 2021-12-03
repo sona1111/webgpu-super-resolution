@@ -76,15 +76,20 @@ async function getModelData(url){
         if(alreadyExist){
             console.log(`using cached ${url}/${layer.name}`)
             result[layer.name] = JSON.parse(alreadyExist);
-            result[layer.name].w = new Float32Array(Object.values(result[layer.name].w));
-            result[layer.name].b = new Float32Array(Object.values(result[layer.name].b));
+            result[layer.name].w = await getLDBAsync(`${url}/${layer.name}/w`);
+            result[layer.name].b = await getLDBAsync(`${url}/${layer.name}/b`);
             continue;
         }
 
         const layerWeights = await downloadLayerWeights(url, layer);
         result[layer.name] = layerWeights;
         try{
-            ldb.set(`${url}/${layer.name}`, JSON.stringify(layerWeights));
+            ldb.set(`${url}/${layer.name}`, JSON.stringify({
+                'wshape': layerWeights.wshape,
+                'bshape': layerWeights.bshape
+            }));
+            ldb.set(`${url}/${layer.name}/w`, layerWeights.w)
+            ldb.set(`${url}/${layer.name}/b`, layerWeights.b)
             console.log(`Stored ${url} to localstorage`);
         }catch (error){
             console.log(`UNABLE to store ${url} to localstorage`);

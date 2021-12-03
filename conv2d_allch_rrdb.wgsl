@@ -11,13 +11,14 @@
   kernSizes: array<i32, 4>;
   offsetw: u32;
   offsetb: i32;
+  inputOffset: u32;
+  outputOffset: i32;
 };
 
-[[group(0), binding(0)]] var<storage, read> inputImage : Array;
-[[group(0), binding(1)]] var<storage, read> inputKernel : Array;
-[[group(0), binding(2)]] var<storage, read> inputBias : Array;
-[[group(0), binding(3)]] var<storage, write> resultImage : Array;
-[[group(0), binding(4)]] var<storage, read> ufs : UBO;
+[[group(0), binding(0)]] var<storage, read> inputKernel : Array;
+[[group(0), binding(1)]] var<storage, read> inputBias : Array;
+[[group(0), binding(2)]] var<storage, write> resultImage : Array;
+[[group(0), binding(3)]] var<storage, read> ufs : UBO;
 
 
 
@@ -31,7 +32,6 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
 
 
 
-    //resultImage.size = vec4<f32>(inputImage.size.x, inputKernel.size.x, inputImage.size.z, inputImage.size.w);
     let x = i32(global_id.x);
     let y = i32(global_id.y);
     let co = i32(global_id.z);
@@ -56,7 +56,7 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
                                  u32(y+i) * u32(ufs.inputSizes[1]) +
                                  u32(x+j);
                 //resultImage.numbers[dbg_idx] = f32(inputImage.numbers[imageIndex]);
-                result = result + (inputKernel.numbers[ufs.offsetw + kernIndex] * inputImage.numbers[imageIndex]);
+                result = result + (inputKernel.numbers[ufs.offsetw + kernIndex] * resultImage.numbers[ufs.inputOffset + imageIndex]);
 
 
             }
@@ -67,9 +67,9 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
 
 
 
-    let index = (co * ufs.outputSizes[0] * ufs.outputSizes[1]) + (ufs.outputSizes[0] * y) + x;
+    let index = (co * ufs.outputSizes[0] * ufs.outputSizes[1]) + (ufs.outputSizes[0] * y) + x + ufs.outputOffset;
 
-    resultImage.numbers[index] = resultImage.numbers[index] + result;
+    resultImage.numbers[index] = result;
 
 
 
