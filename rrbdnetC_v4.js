@@ -106,53 +106,6 @@ async function read_shader(path){
 
     }
 
-    // function device2deviceSameBuf(buffer, inputOffset, outputOffset, length){
-    //     const inputSize = [in_ch_count, inp_img.h, inp_img.w];
-    //
-    //
-    //     const computePipeline = device.createComputePipeline({
-    //         compute: {
-    //             module: shaderModuleCopy,
-    //             entryPoint: "main"
-    //         }
-    //     });
-    //
-    //     // Bind group
-    //     const matrixSize = new Uint32Array(inputSize.concat([inputOffset, outputOffset]));
-    //
-    //     const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
-    //
-    //     const bindGroup = device.createBindGroup({
-    //         layout: computePipeline.getBindGroupLayout(0 /* index */),
-    //         entries: [
-    //             {
-    //                 binding: 0,
-    //                 resource: {
-    //                     buffer: inputBuff
-    //                 }
-    //             },
-    //             {
-    //                 binding: 1,
-    //                 resource: {
-    //                     buffer: unifbuffer
-    //                 }
-    //             }
-    //         ]
-    //     });
-    //     const commandEncoder = device.createCommandEncoder();
-    //
-    //     const passEncoder = commandEncoder.beginComputePass();
-    //     passEncoder.setPipeline(computePipeline);
-    //     passEncoder.setBindGroup(0, bindGroup);
-    //     const x = Math.ceil(inputSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-    //     const y = Math.ceil(inputSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
-    //     const z = Math.ceil(inputSize[0] / 4);
-    //     passEncoder.dispatch(x, y, z);
-    //     passEncoder.endPass();
-    //     const gpuCommands = commandEncoder.finish();
-    //     device.queue.submit([gpuCommands]);
-    // }
-
     function device2device(inputBuffer, inputOffset, outputBuffer, outputOffset, length){
         const copyEncoder = device.createCommandEncoder();
         copyEncoder.copyBufferToBuffer(
@@ -365,7 +318,7 @@ async function read_shader(path){
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
 
-
+        unifbuffer.destroy();
 
 
 
@@ -472,7 +425,7 @@ async function read_shader(path){
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
 
-
+        unifbuffer.destroy();
 
 
 
@@ -520,6 +473,8 @@ async function read_shader(path){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
+
+        unifbuffer.destroy();
     }
 
     async function gpuexec_relu_rrdb(writebuf, inputSize, outputOffset, shaderModule) {
@@ -564,6 +519,8 @@ async function read_shader(path){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
+
+        unifbuffer.destroy();
     }
 
     async function gpuexec_readbuf(output, outputsize, offset){
@@ -655,6 +612,7 @@ async function read_shader(path){
         const res =  await gpuexec_readbuf(outputBuff, outputsize);
         outputBuff.destroy();
         inputBuff.destroy();
+        unifbuffer.destroy();
         return res;
     }
 
@@ -734,7 +692,7 @@ async function read_shader(path){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
-
+        unifbuffer.destroy();
 
     }
 
@@ -795,6 +753,7 @@ async function read_shader(path){
         const res = await gpuexec_readbuf(outputBuff, outputsize);
         outputBuff.destroy();
         inputBuff.destroy();
+        unifbuffer.destroy();
         return res;
     }
 
@@ -855,6 +814,7 @@ async function read_shader(path){
         const res = await gpuexec_readbuf(outputBuff, outputsize);
         outputBuff.destroy();
         inputBuff.destroy();
+        unifbuffer.destroy();
         return res;
     }
 
