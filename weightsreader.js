@@ -64,8 +64,9 @@ function getLDBAsync(key) {
     });
 }
 
-async function getModelData(url){
-
+async function storeModelData(store_key, url){
+    document.getElementById('imageUpload').disabled = true;
+    document.getElementById('dataload_status').textContent = `Downloading ${store_key}...`;
     let meta = await makeRequest("GET", `${url}/modelinfo.json`, 'json');
 
     // by default, use local storage for cache
@@ -96,6 +97,8 @@ async function getModelData(url){
         }
     }
 
-    return result;
+    modeldata[store_key] = result;
+    document.getElementById('dataload_status').textContent = `Ready!`;
+    document.getElementById('imageUpload').disabled = false;
 }
 

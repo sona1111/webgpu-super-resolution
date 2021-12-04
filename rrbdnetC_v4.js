@@ -7,7 +7,9 @@ async function read_shader(path){
 
 
 
-(async () => {
+async function run_nn(input_elem, output_elem, _modeldata){
+
+    document.getElementById('imageUpload').disabled = true;
     if (!navigator.gpu) {
       console.log("WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.");
       return;
@@ -21,9 +23,9 @@ async function read_shader(path){
     }
     const device = await adapter.requestDevice();
 
-    const inp_img = getImgDataFromImgElem(document.getElementById('sm_img'));
-    imagedata2Canvas(inp_img.c, document.getElementById('result'), inp_img.w, inp_img.h);
-    const modeldata = await getModelData("ESRGAN_py/RRDB_ESRGAN_x4");
+    const inp_img = getImgDataFromImgElem(input_elem);
+    imagedata2Canvas(inp_img.c, output_elem, inp_img.w, inp_img.h);
+    
 
     const shaderModuleConv = device.createShaderModule({
         code: await read_shader( 'shaders_f32/conv2d_allch.wgsl')
@@ -123,7 +125,7 @@ async function read_shader(path){
         device.queue.submit([copyCommands]);
     }
 
-    function preloadWeightsAndBias(modeldata){
+    function preloadWeightsAndBias(_modeldata){
         // allocate one large gpu array for weights and one for bias
         const offsetsw = {};
         const sizesw = {};
@@ -131,13 +133,13 @@ async function read_shader(path){
         const offsetsb = {};
         const sizesb = {};
         let offsetb = 0;
-        for(let layername in modeldata){
+        for(let layername in _modeldata){
             offsetsw[layername] = offsetw;
-            sizesw[layername] = modeldata[layername].w.length
-            offsetw += modeldata[layername].w.length;
+            sizesw[layername] = _modeldata[layername].w.length
+            offsetw += _modeldata[layername].w.length;
             offsetsb[layername] = offsetb;
-            sizesb[layername] = modeldata[layername].b.length
-            offsetb += modeldata[layername].b.length;
+            sizesb[layername] = _modeldata[layername].b.length
+            offsetb += _modeldata[layername].b.length;
         }
         const gpuArrayWeight = device.createBuffer({
             mappedAtCreation: true,
@@ -150,13 +152,13 @@ async function read_shader(path){
             usage: GPUBufferUsage.STORAGE
         });
 
-        for(let layername in modeldata){
+        for(let layername in _modeldata){
             const gpuArrayRNGW = gpuArrayWeight.getMappedRange(Float32Array.BYTES_PER_ELEMENT * offsetsw[layername],
                 Float32Array.BYTES_PER_ELEMENT * sizesw[layername]);
-            new Float32Array(gpuArrayRNGW).set(modeldata[layername].w);
+            new Float32Array(gpuArrayRNGW).set(_modeldata[layername].w);
             const gpuArrayRNGB = gpuArrayBias.getMappedRange(Float32Array.BYTES_PER_ELEMENT * offsetsb[layername],
                 Float32Array.BYTES_PER_ELEMENT * sizesb[layername]);
-            new Float32Array(gpuArrayRNGB).set(modeldata[layername].b);
+            new Float32Array(gpuArrayRNGB).set(_modeldata[layername].b);
         }
         gpuArrayWeight.unmap();
         gpuArrayBias.unmap();
@@ -864,35 +866,35 @@ async function read_shader(path){
     async function esrgan(){
 
 
-        const layerdatabufs = await preloadWeightsAndBias(modeldata);
+        const layerdatabufs = await preloadWeightsAndBias(_modeldata);
 
         async function eval_conv(name, inp, inp_shape, relu){
-            //console.log(modeldata[name])
+            //console.log(_modeldata[name])
             console.log(name);
             return await conv_fwd(
                 inp,
                 inp_shape,
                 layerdatabufs.wbuf,
-                modeldata[name].wshape,
+                _modeldata[name].wshape,
                 layerdatabufs.offsetsw[name],
                 layerdatabufs.bbuf,
-                modeldata[name].bshape,
+                _modeldata[name].bshape,
                 layerdatabufs.offsetsb[name],
                 relu
             );
         }
 
         async function eval_conv_rrdb(name, buffer, in_ch_count, inputOffset, outputOffset, inp_shape, relu, dbg){
-            //console.log(modeldata[name])
+            //console.log(_modeldata[name])
             console.log(name);
             return await conv_fwd_rrdb(
                 buffer,
                 in_ch_count, inp_shape,
                 layerdatabufs.wbuf,
-                modeldata[name].wshape,
+                _modeldata[name].wshape,
                 layerdatabufs.offsetsw[name],
                 layerdatabufs.bbuf,
-                modeldata[name].bshape,
+                _modeldata[name].bshape,
                 layerdatabufs.offsetsb[name],
                 inputOffset, outputOffset,
                 relu, dbg
@@ -981,8 +983,8 @@ async function read_shader(path){
 
     console.log(`NN run took ${endTime - startTime} milliseconds`)
 
-    imagedata2Canvas(nn_result, document.getElementById('result'), inp_img.w*4, inp_img.h*4);
+    imagedata2Canvas(nn_result, output_elem, inp_img.w*4, inp_img.h*4);
+    document.getElementById('imageUpload').disabled = false;
 
-
-  })();
+  }
   

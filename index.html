@@ -4,10 +4,23 @@
     <meta charset="UTF-8">
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
     <title>WebGPU Super Resolution Inference</title>
+    <script>
+        let modeldata = {};
+    </script>
     <script src="localStorageDB.min.js"></script>
     <script src="weightsreader.js"></script>
 </head>
 <body>
-    Hello World (just making sure GH pages works adequately)
+
+    <img src="baboon_sm.png" id="sm_img" crossorigin="anonymous">
+    yay
+    <canvas id="result"></canvas>
+    <input id="imageUpload" name="imageUpload" type="file">
+
+    <pre id="dataload_status">Init...</pre>
+
+    <script src="utils.js"></script>
+    <script src="rrbdnetC_v4.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>
