@@ -68,33 +68,39 @@ async function storeModelData(store_key, url){
     document.getElementById('imageUpload').disabled = true;
     document.getElementById('dataload_status').textContent = `Downloading ${store_key}...`;
     let meta = await makeRequest("GET", `${url}/modelinfo.json`, 'json');
-
+    const progress = document.getElementById('download_progress');
+    progress.value = 0;
     // by default, use local storage for cache
     const result = {};
+    const num_layers  = Object.keys(meta.layers).length;
+    let progress_done = 0;
+    progress.max = num_layers;
 
     for(let layer of meta.layers){
+        console.log(progress_done);
         const alreadyExist = await getLDBAsync(`${url}/${layer.name}`);
         if(alreadyExist){
             console.log(`using cached ${url}/${layer.name}`)
             result[layer.name] = JSON.parse(alreadyExist);
             result[layer.name].w = await getLDBAsync(`${url}/${layer.name}/w`);
             result[layer.name].b = await getLDBAsync(`${url}/${layer.name}/b`);
-            continue;
+        }else{
+            const layerWeights = await downloadLayerWeights(url, layer);
+            result[layer.name] = layerWeights;
+            try{
+                ldb.set(`${url}/${layer.name}`, JSON.stringify({
+                    'wshape': layerWeights.wshape,
+                    'bshape': layerWeights.bshape
+                }));
+                ldb.set(`${url}/${layer.name}/w`, layerWeights.w)
+                ldb.set(`${url}/${layer.name}/b`, layerWeights.b)
+                console.log(`Stored ${url} to localstorage`);
+            }catch (error){
+                console.log(`UNABLE to store ${url} to localstorage`);
+            }
         }
-
-        const layerWeights = await downloadLayerWeights(url, layer);
-        result[layer.name] = layerWeights;
-        try{
-            ldb.set(`${url}/${layer.name}`, JSON.stringify({
-                'wshape': layerWeights.wshape,
-                'bshape': layerWeights.bshape
-            }));
-            ldb.set(`${url}/${layer.name}/w`, layerWeights.w)
-            ldb.set(`${url}/${layer.name}/b`, layerWeights.b)
-            console.log(`Stored ${url} to localstorage`);
-        }catch (error){
-            console.log(`UNABLE to store ${url} to localstorage`);
-        }
+        progress_done += 1;
+        progress.value = progress_done;
     }
 
     modeldata[store_key] = result;
