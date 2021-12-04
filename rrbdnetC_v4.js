@@ -26,40 +26,40 @@ async function read_shader(path){
     const modeldata = await getModelData("ESRGAN_py/RRDB_ESRGAN_x4");
 
     const shaderModuleConv = device.createShaderModule({
-        code: await read_shader( 'conv2d_allch.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_allch.wgsl')
     });
     const shaderModuleReLU = device.createShaderModule({
-        code: await read_shader( 'leakyrelu.wgsl')
+        code: await read_shader( 'shaders_f32/leakyrelu.wgsl')
     });
     const shaderModuleScaleRes = device.createShaderModule({
-        code: await read_shader( 'scaleandresidual.wgsl')
+        code: await read_shader( 'shaders_f32/scaleandresidual.wgsl')
     });
     const shaderModuleInterpolate = device.createShaderModule({
-        code: await read_shader( 'interpolate.wgsl')
+        code: await read_shader( 'shaders_f32/interpolate.wgsl')
     });
     const shaderModuleAddition = device.createShaderModule({
-        code: await read_shader( 'addition.wgsl')
+        code: await read_shader( 'shaders_f32/addition.wgsl')
     });
     const shaderModuleConvRrdb = device.createShaderModule({
-        code: await read_shader( 'conv2d_allch_rrdb.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb.wgsl')
     });
     const shaderModuleConvRrdbDbg = device.createShaderModule({
-        code: await read_shader( 'conv2d_allch_rrdb_dbg.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_dbg.wgsl')
     });
     const shaderModuleReLURrdb = device.createShaderModule({
-        code: await read_shader( 'leakyrelu_rrdb.wgsl')
+        code: await read_shader( 'shaders_f32/leakyrelu_rrdb.wgsl')
     });
     const shaderModuleScaleResRrdb = device.createShaderModule({
-        code: await read_shader( 'scaleandresidual_rrdb.wgsl')
+        code: await read_shader( 'shaders_f32/scaleandresidual_rrdb.wgsl')
     });
     const shaderModuleScaleResRrdbInplace = device.createShaderModule({
-        code: await read_shader( 'scaleandresidual_rrdb_inplace.wgsl')
+        code: await read_shader( 'shaders_f32/scaleandresidual_rrdb_inplace.wgsl')
     });
     // const shaderModuleScaleResRrdbRev = device.createShaderModule({
-    //     code: await read_shader( 'scaleandresidual_rrdb_rev.wgsl')
+    //     code: await read_shader( 'shaders_f32/scaleandresidual_rrdb_rev.wgsl')
     // });
     // const shaderModuleCopy = device.createShaderModule({
-    //     code: await read_shader( 'copy.wgsl')
+    //     code: await read_shader( 'shaders_f32/copy.wgsl')
     // });
 
 
@@ -75,6 +75,8 @@ async function read_shader(path){
         gpuArray.unmap();
         return gpuArray;
     }
+
+    
 
     function copy_mat_rdb(rdb_in){
         // for one inner rrdb, we will make two buffers to swap between
