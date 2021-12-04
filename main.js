@@ -18,3 +18,22 @@ document.getElementById('imageUpload').addEventListener('change', function() {
     }
 });
 
+document.getElementById('demo1').addEventListener('click', function() {
+    var img = document.getElementById('sm_img');
+    const output_elem = document.getElementById('result')
+    run_nn(img, output_elem, modeldata["RRDB_ESRGAN_x4"]);
+});
+
+document.getElementById('demo2').addEventListener('click', function() {
+    var img = document.getElementById('med_img');
+    const output_elem = document.getElementById('result')
+    run_nn(img, output_elem, modeldata["RRDB_ESRGAN_x4"]);
+});
+
+document.getElementById('demo3').addEventListener('click', function() {
+    var img = document.getElementById('lrg_img');
+    const output_elem = document.getElementById('result')
+    run_nn(img, output_elem, modeldata["RRDB_ESRGAN_x4"]);
+});
+
+
