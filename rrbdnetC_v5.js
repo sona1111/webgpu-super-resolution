@@ -125,16 +125,19 @@ async function run_nn(input_elem, output_elem, _modeldata){
 
     }
 
-    function get_mat_empty(ch_size){
+    function get_mat_empty(ch_size, width, height){
+        const w = width === undefined ? inp_img.w : width;
+        const h = height === undefined ? inp_img.h : height;
         // for one inner rrdb, we will make two buffers to swap between
         // for the first we must copy the first rdb_in data to it
         const gpuArrayRead = device.createBuffer({
             mappedAtCreation: false,
-            size: Float32Array.BYTES_PER_ELEMENT * (ch_size) * inp_img.w * inp_img.h,
+            size: Float32Array.BYTES_PER_ELEMENT * (ch_size) * w * h,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
         });
         return gpuArrayRead;
     }
+
 
     function device2device(inputBuffer, inputOffset, outputBuffer, outputOffset, length){
         const copyEncoder = device.createCommandEncoder();
@@ -960,7 +963,67 @@ async function run_nn(input_elem, output_elem, _modeldata){
         return res;
     }
 
+    async function up_resolution_dyn(inputBuff, outputBuff, inputSize) {
+        //inputSize = [input.length / (input_shape[0] * input_shape[1]), input_shape[0], input_shape[1]];
+        //const inputSize = [in_ch_count, inp_img.h, inp_img.w];
+        // const outputBuff =  get_mat_gpu_output(4 * inputSize[0] * input_shape[0] * input_shape[1]);
+        // const inputBuff = copy_mat_gpu(input, Float32Array, GPUBufferUsage.STORAGE);
+        // const outputsize = Float32Array.BYTES_PER_ELEMENT * ((4 * inputSize[0] * input_shape[0] * input_shape[1]));
 
+
+        const computePipeline = device.createComputePipeline({
+            compute: {
+                module: shaderModuleInterpolate,
+                entryPoint: "main"
+            }
+        });
+
+        // Bind group
+        const matrixSize = new Uint32Array(inputSize);
+
+        const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
+
+        const bindGroup = device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0 /* index */),
+            entries: [
+                {
+                    binding: 0,
+                    resource: {
+                        buffer: inputBuff
+                    }
+                },
+                {
+                    binding: 1,
+                    resource: {
+                        buffer: outputBuff
+                    }
+                },
+                {
+                    binding: 2,
+                    resource: {
+                        buffer: unifbuffer
+                    }
+                }
+            ]
+        });
+        const commandEncoder = device.createCommandEncoder();
+
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(computePipeline);
+        passEncoder.setBindGroup(0, bindGroup);
+        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
+        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const z = Math.ceil(matrixSize[0] / 4);
+        passEncoder.dispatch(x, y, z);
+        passEncoder.endPass();
+        const gpuCommands = commandEncoder.finish();
+        device.queue.submit([gpuCommands]);
+        //const res = await gpuexec_readbuf(outputBuff, outputsize);
+        // outputBuff.destroy();
+        // inputBuff.destroy();
+        unifbuffer.destroy();
+        //return res;
+    }
 
     async function conv_fwd(inp, inp_shape, weight, wshape, offsetw, bias, bshape, offsetb, relu){
         if(Array.isArray(inp)){  // not float32 array, standard JS array
@@ -1092,21 +1155,38 @@ async function run_nn(input_elem, output_elem, _modeldata){
         rrbd_swapbuf.destroy()
         await matrix_addition(rbd_swapbuf, feaBuf, 64);
         rbd_swapbuf.destroy()
-        let fea = await gpuexec_readbuf(feaBuf, Float32Array.BYTES_PER_ELEMENT * (64) * inp_img.w * inp_img.h,  (0) * inp_img.w * inp_img.h);
+
         // console.log(fea)
-        fea = await up_resolution(fea, [inp_img.h, inp_img.w]);
-        fea = await eval_conv('upconv1', fea, [2 * inp_img.h, 2 * inp_img.w], true);
-        fea = await up_resolution(fea, [2 * inp_img.h, 2 * inp_img.w]);
-        fea = await eval_conv('upconv2', fea, [4 * inp_img.h, 4 * inp_img.w], true);
-        fea = await eval_conv('HRconv', fea, [4 * inp_img.h, 4 * inp_img.w], true);
-        fea = await eval_conv('conv_last', fea, [4 * inp_img.h, 4 * inp_img.w], false);
-        // console.log(fea)
+        const upres1_swapbuf1 = get_mat_empty(64, inp_img.w * 2, inp_img.h * 2);
+        await up_resolution_dyn(feaBuf, upres1_swapbuf1,  [64, inp_img.h, inp_img.w]);
+        feaBuf.destroy();
+
+        const upres1_swapbuf2 = get_mat_empty(64, inp_img.w * 2, inp_img.h * 2);
+
+        await eval_conv_rrdb('upconv1', upres1_swapbuf1, upres1_swapbuf2, 64, 0, 0, [2 * inp_img.h, 2 * inp_img.w], true);
+        upres1_swapbuf1.destroy();
+
+        const upres2_swapbuf1 = get_mat_empty(64, inp_img.w * 4, inp_img.h * 4);
+        await up_resolution_dyn(upres1_swapbuf2, upres2_swapbuf1,  [64, 2 * inp_img.h, 2 * inp_img.w]);
+        upres1_swapbuf2.destroy();
+
+        const upres2_swapbuf2 = get_mat_empty(64, inp_img.w * 4, inp_img.h * 4);
+        await eval_conv_rrdb('upconv2', upres2_swapbuf1, upres2_swapbuf2, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true);
+        await eval_conv_rrdb('HRconv', upres2_swapbuf2, upres2_swapbuf1, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true);
+        upres2_swapbuf2.destroy();
+
+        const outImgBuf = get_mat_empty(3, 4 * inp_img.w, 4 * inp_img.h);
+        eval_conv_rrdb('conv_last', upres2_swapbuf1, outImgBuf, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], false);
+        upres2_swapbuf1.destroy();
+
+        let outImg = await gpuexec_readbuf(outImgBuf, Float32Array.BYTES_PER_ELEMENT * (3) * inp_img.w * 4 * inp_img.h * 4,  (0) * inp_img.w * inp_img.h);
+        outImgBuf.destroy();
 
         // delete weights and biases from gpu
         layerdatabufs.wbuf.destroy();
         layerdatabufs.bbuf.destroy();
 
-        return fea;
+        return outImg;
 
     }
     var startTime = performance.now()
