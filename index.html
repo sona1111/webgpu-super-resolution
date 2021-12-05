@@ -10,6 +10,7 @@
     <title>WebGPU Super Resolution Inference</title>
     <script>
         let modeldata = {};
+        let current_network = null;
     </script>
     <script src="localStorageDB.min.js"></script>
     <script src="weightsreader.js"></script>
@@ -51,8 +52,14 @@
     <div class="container">
 
         <div class="jumbotron">
-            <h1>Client side WebGPU Super Resolution with <a href="https://github.com/xinntao/ESRGAN">ESRGAN</a>!</h1>
+            <div class="col-sm-3">
+                <img src="static/img/webgpu_128.png">
+            </div>
+            <div class="col-sm-9">
+                <h3>Client side WebGPU Super Resolution with <a href="https://github.com/xinntao/ESRGAN">ESRGAN</a>!</h3>
+            </div>
 
+            <div class="col-sm-12" style="margin-bottom: -40px;">
             <div id="clientinfopanel" class="panel">
                 <div class="panel-heading">
                     <h3 class="panel-title">Client Info</h3>
@@ -63,6 +70,8 @@
                     </pre>
                 </div>
             </div>
+            </div>
+            <br style="clear: both">
         </div>
 
         <hr style="clear: both">
@@ -71,6 +80,27 @@
             <pre id="dataload_status">Init...</pre>
         </div>
         <hr style="clear: both">
+        <div class="col-md-12" id="networksList">
+            <div class="col-sm-2">
+                <div class="panel panel-default networkpanel">
+                    <div class="panel-body text-center">
+                        <h6>RRDB ESRGAN</h6>
+                        <img style="width: 100%;" src="static/img/nn_esrgan.png">
+                        <button class="btn btn-primary btn-sm networkload" data-networkname="RRDB_ESRGAN_x4" disabled>LOAD</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-2">
+                <div class="panel panel-default networkpanel">
+                    <div class="panel-body text-center">
+                        <h6>RRDB PSNR</h6>
+                        <img style="width: 100%;" src="static/img/nn_psnr.png">
+                        <button class="btn btn-primary btn-sm networkload" data-networkname="RRDB_PSNR_x4" disabled>LOAD</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <br style="clear: both">
 
         <div class="col-md-12">
             <div class="col-md-3">
@@ -79,12 +109,12 @@
                         <h3 class="panel-title">Demo ESRGAN</h3>
                     </div>
                     <div class="panel-body">
-                        <img src="baboon_sm.png" id="sm_img" crossorigin="anonymous" style="display: none;">
-                        <button type="button" id="demo1">Test Small Image</button>
-                        <img src="baboon.png" id="med_img" crossorigin="anonymous" style="display: none;">
-                        <button type="button" id="demo2">Test Medium Image</button>
-                        <img src="1000x1000.png" id="lrg_img" crossorigin="anonymous" style="display: none;">
-                        <button type="button" id="demo3">Test Large Image</button>
+                        <img src="baboon_sm.png" id="sm_img" class="btn btn-default" crossorigin="anonymous" style="display: none;">
+                        <button type="button" id="demo1" disabled>Test Small Image</button>
+                        <img src="baboon.png" id="med_img" class="btn btn-default" crossorigin="anonymous" style="display: none;">
+                        <button type="button" id="demo2" disabled>Test Medium Image</button>
+                        <img src="1000x1000.png" id="lrg_img" class="btn btn-default" crossorigin="anonymous" style="display: none;">
+                        <button type="button" id="demo3" disabled>Test Large Image</button>
                     </div>
                 </div>
             </div>
@@ -104,10 +134,10 @@
             <div class="col-md-3">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h3 class="panel-title">Upload your own ESRGAN</h3>
+                        <h3 class="panel-title">Upload your own image</h3>
                     </div>
                     <div class="panel-body">
-                        <input id="imageUpload" name="imageUpload" type="file">
+                        <input id="imageUpload" name="imageUpload" type="file" disabled>
                     </div>
                 </div>
             </div>
@@ -132,16 +162,36 @@
     <script src="utils.js"></script>
     <script src="rrbdnetC_v5.js"></script>
     <script src="main.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     <script>
-        if(populateWebGpuInfo()){
-            document.getElementById('clientinfopanel').classList.add('panel-success');
-            initmain();
-        }else{
-            document.getElementById('clientinfopanel').classList.add('panel-danger');
+        async function main(){
+            if(populateWebGpuInfo()){
+                document.getElementById('clientinfopanel').classList.add('panel-success');
+
+                $('#networksList .networkload').prop('disabled', false);
+
+                initmain();
+            }else{
+                document.getElementById('clientinfopanel').classList.add('panel-danger');
+            }
+
+            $('#networksList .networkload').click(async function(){
+                $('.networkpanel').css('background-color', '');
+
+                //$('.networkpanel').removeclass('panel-default');
+                //$('.networkpanel').removeclass('panel-success');
+
+                const networkname = $(this).data('networkname');
+                await storeModelData(networkname, `ESRGAN_py/${networkname}`);
+                current_network = networkname;
+                $(this).closest('.networkpanel').css('background-color', '#dff0d8');
+                $('#imageUpload, #demo1, #demo2, #demo3').prop('disabled', false);
+            })
         }
+        main();
     </script>
 
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 </body>
 </html>

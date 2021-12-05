@@ -54,12 +54,13 @@ def quantize_model(model):
     return model_static_quantized
 
 if __name__ == "__main__":
-    model_weight_path = 'models/RRDB_ESRGAN_x4.pth'  # models/RRDB_ESRGAN_x4.pth OR models/RRDB_PSNR_x4.pth
+    #model_weight_path = 'models/RRDB_ESRGAN_x4.pth'  # models/RRDB_ESRGAN_x4.pth OR models/RRDB_PSNR_x4.pth
+    model_weight_path = 'models/RRDB_PSNR_x4.pth'
     model = arch.RRDBNet(3, 3, 64, 23, gc=32)
     model.load_state_dict(torch.load(model_weight_path), strict=True)
     model.eval()
 
-    model_quant = quantize_model(model)
-    print(model_quant.state_dict()['conv_first.bias'])
+    # model_quant = quantize_model(model)
+    # print(model_quant.state_dict()['conv_first.bias'])
 
-    #export_js_modelbin(model_quant, 'RRDB_ESRGAN_x4_half', 'RRDB_ESRGAN_x4', True)
+    export_js_modelbin(model, 'RRDB_PSNR_x4', 'RRDB_PSNR_x4', False)
