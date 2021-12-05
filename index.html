@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+    <title>WebGPU Super Resolution Inference</title>
+    <script>
+        let modeldata = {};
+    </script>
+    <script src="localStorageDB.min.js"></script>
+    <script src="weightsreader.js"></script>
+</head>
+<body>
+
+    <img src="baboon_sm.png" id="sm_img" crossorigin="anonymous" style="display: none;">
+    <button type="button" id="demo1">Test Small Image</button>
+    <img src="baboon.png" id="med_img" crossorigin="anonymous" style="display: none;">
+    <button type="button" id="demo2">Test Medium Image</button>
+    <img src="1000x1000.png" id="lrg_img" crossorigin="anonymous" style="display: none;">
+    <button type="button" id="demo3">Test Large Image</button>
+    <canvas id="result"></canvas>
+    <input id="imageUpload" name="imageUpload" type="file">
+
+    <progress id="download_progress" value=""></progress>
+    <pre id="dataload_status">Init...</pre>
+
+    <script src="utils.js"></script>
+    <script src="rrbdnetC_v5.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>

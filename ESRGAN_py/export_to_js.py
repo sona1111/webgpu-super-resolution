@@ -9,12 +9,13 @@ import torch.nn as nn
 import json
 import sys
 
-def export_js_modelbin(model, path):
+def export_js_modelbin(model, path, arch, is_quantized):
 
     if not os.path.exists(path):
         os.makedirs(path)
 
-    modelinfo = {'arch': 'ESRGAN',
+    modelinfo = {'arch': arch,
+                 'is_quantized': is_quantized,
                  'layers':[
 
                  ]}
@@ -36,10 +37,21 @@ def export_js_modelbin(model, path):
         json.dump(modelinfo, f)
 
     for param_tensor in model.state_dict():
+        print('exporting', param_tensor)
         with open(os.path.join(path, f'{param_tensor}.bin'), 'wb') as f:
-            f.write(model.state_dict()[param_tensor].numpy().tobytes())
+            raw = model.state_dict()[param_tensor]
+            if is_quantized:
+                raw = raw.int_repr()
+            f.write(raw.numpy().tobytes())
 
+def quantize_model(model):
 
+    backend = "qnnpack"
+    model.qconfig = torch.quantization.get_default_qconfig(backend)
+    torch.backends.quantized.engine = backend
+    model_static_quantized = torch.quantization.prepare(model, inplace=False)
+    model_static_quantized = torch.quantization.convert(model_static_quantized, inplace=False)
+    return model_static_quantized
 
 if __name__ == "__main__":
     model_weight_path = 'models/RRDB_ESRGAN_x4.pth'  # models/RRDB_ESRGAN_x4.pth OR models/RRDB_PSNR_x4.pth
@@ -47,4 +59,7 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load(model_weight_path), strict=True)
     model.eval()
 
-    export_js_modelbin(model, 'RRDB_ESRGAN_x4')
+    model_quant = quantize_model(model)
+    print(model_quant.state_dict()['conv_first.bias'])
+
+    #export_js_modelbin(model_quant, 'RRDB_ESRGAN_x4_half', 'RRDB_ESRGAN_x4', True)

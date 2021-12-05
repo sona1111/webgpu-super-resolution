@@ -69,22 +69,22 @@ async function read_shader(path){
     }
 
     const shaderModuleConv = device.createShaderModule({
-        code: await read_shader( 'conv2d_norelu.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_norelu.wgsl')
     });
     const shaderModuleAddBias = device.createShaderModule({
-        code: await read_shader( 'addbias.wgsl')
+        code: await read_shader( 'shaders_f32/addbias.wgsl')
     });
     const shaderModuleReLU = device.createShaderModule({
-        code: await read_shader( 'leakyrelu.wgsl')
+        code: await read_shader( 'shaders_f32/leakyrelu.wgsl')
     });
     const shaderModuleScaleRes = device.createShaderModule({
-        code: await read_shader( 'scaleandresidual.wgsl')
+        code: await read_shader( 'shaders_f32/scaleandresidual.wgsl')
     });
     const shaderModuleInterpolate = device.createShaderModule({
-        code: await read_shader( 'interpolate.wgsl')
+        code: await read_shader( 'shaders_f32/interpolate.wgsl')
     });
     const shaderModuleAddition = device.createShaderModule({
-        code: await read_shader( 'addition.wgsl')
+        code: await read_shader( 'shaders_f32/addition.wgsl')
     });
 
     async function gpuexec_conv(output, input, inputshape, weight, weightshape, bias, in_ch_idx, out_ch_idx, shaderModule) {
@@ -476,7 +476,7 @@ async function read_shader(path){
         const bias = copy_mat_gpu(b, Float32Array, GPUBufferUsage.STORAGE);
         const outputsize = Float32Array.BYTES_PER_ELEMENT * ((wshape[0] * inp_shape[0] * inp_shape[1]));
 
-        //console.log(await read_shader( 'conv2d_norelu.wgsl'))
+        //console.log(await read_shader( 'shaders_f32/conv2d_norelu.wgsl'))
 
         //console.log(output, input, weight, bias);
         const in_ch_count = inp.length / (inp_shape[0] * inp_shape[1]);

@@ -229,12 +229,12 @@ async function read_shader(path){
 
 
         const shaderModuleConv = device.createShaderModule({
-            code: await read_shader( 'conv2d_norelu.wgsl')
+            code: await read_shader( 'shaders_f32/conv2d_norelu.wgsl')
         });
         const shaderModuleAddBias = device.createShaderModule({
-            code: await read_shader( 'addbias.wgsl')
+            code: await read_shader( 'shaders_f32/addbias.wgsl')
         });
-        //console.log(await read_shader( 'conv2d_norelu.wgsl'))
+        //console.log(await read_shader( 'shaders_f32/conv2d_norelu.wgsl'))
 
         console.log(output, input, weight, bias);
         const in_ch_count = inp.length / (inp_img.w * inp_img.h);
@@ -364,7 +364,7 @@ async function read_shader(path){
         // a very simple / naive way to take a kernel and execute it
 
         const shaderModule = device.createShaderModule({
-            code: await read_shader( 'set_sim.wgsl')
+            code: await read_shader( 'shaders_f32/set_sim.wgsl')
         });
 
         const bindGroupLayout = device.createBindGroupLayout({

@@ -24,36 +24,17 @@ function makeRequest(method, url, responsetype) {
     });
 }
 
-async function downloadLayerWeights(url, layer){
+async function downloadLayerWeights(url, layer, arrayclass){
 
 
     // note, theoretically with this model we would start to evaluate the earlier layers before
     // the later ones are downloaded
-    let weights = new Float32Array(await makeRequest("GET", `${url}/${layer.name}.weight.bin`, 'arraybuffer'));
-    let bias = new Float32Array(await makeRequest("GET", `${url}/${layer.name}.bias.bin`, 'arraybuffer'));
+    let weights = new arrayclass(await makeRequest("GET", `${url}/${layer.name}.weight.bin`, 'arraybuffer'));
+    let bias = new arrayclass(await makeRequest("GET", `${url}/${layer.name}.bias.bin`, 'arraybuffer'));
 
 
     return {'w': weights, 'b': bias, 'wshape':layer.wshape, 'bshape':layer.bshape};
 
-    // var oReq = new XMLHttpRequest();
-    // oReq.open("GET", url, true);
-    // oReq.responseType = "arraybuffer";
-    //
-    // const model_weights = {};
-    //
-    // oReq.onload = function (oEvent) {
-    //     var arrayBuffer = oReq.response; // Note: not oReq.responseText
-    //     if (arrayBuffer) {
-    //
-    //         // const parts = arrayBuffer.
-    //         // var byteArray = new Uint8Array(arrayBuffer);
-    //         // for (var i = 0; i < byteArray.byteLength; i++) {
-    //         //     // do something with each byte in the array
-    //         // }
-    //     }
-    // };
-    //
-    // oReq.send(null);
 }
 
 function getLDBAsync(key) {
@@ -64,38 +45,54 @@ function getLDBAsync(key) {
     });
 }
 
-async function getModelData(url){
-
+async function storeModelData(store_key, url){
+    document.getElementById('imageUpload').disabled = true;
+    document.getElementById('dataload_status').textContent = `Downloading ${store_key}...`;
     let meta = await makeRequest("GET", `${url}/modelinfo.json`, 'json');
-
+    const arrayclass = meta.is_quantized === true ? Int8Array : Float32Array;
+    const progress = document.getElementById('download_progress');
+    progress.value = 0;
     // by default, use local storage for cache
     const result = {};
+    const num_layers  = Object.keys(meta.layers).length;
+    let progress_done = 0;
+    progress.max = num_layers;
 
     for(let layer of meta.layers){
+
         const alreadyExist = await getLDBAsync(`${url}/${layer.name}`);
         if(alreadyExist){
             console.log(`using cached ${url}/${layer.name}`)
             result[layer.name] = JSON.parse(alreadyExist);
             result[layer.name].w = await getLDBAsync(`${url}/${layer.name}/w`);
             result[layer.name].b = await getLDBAsync(`${url}/${layer.name}/b`);
-            continue;
+        }else{
+            const layerWeights = await downloadLayerWeights(url, layer, arrayclass);
+            result[layer.name] = layerWeights;
+            try{
+                ldb.set(`${url}/${layer.name}`, JSON.stringify({
+                    'wshape': layerWeights.wshape,
+                    'bshape': layerWeights.bshape
+                }));
+                ldb.set(`${url}/${layer.name}/w`, layerWeights.w)
+                ldb.set(`${url}/${layer.name}/b`, layerWeights.b)
+                console.log(`Stored ${url} to localstorage`);
+            }catch (error){
+                console.log(`UNABLE to store ${url} to localstorage`);
+            }
         }
-
-        const layerWeights = await downloadLayerWeights(url, layer);
-        result[layer.name] = layerWeights;
-        try{
-            ldb.set(`${url}/${layer.name}`, JSON.stringify({
-                'wshape': layerWeights.wshape,
-                'bshape': layerWeights.bshape
-            }));
-            ldb.set(`${url}/${layer.name}/w`, layerWeights.w)
-            ldb.set(`${url}/${layer.name}/b`, layerWeights.b)
-            console.log(`Stored ${url} to localstorage`);
-        }catch (error){
-            console.log(`UNABLE to store ${url} to localstorage`);
-        }
+        progress_done += 1;
+        progress.value = progress_done;
     }
 
-    return result;
+    modeldata[store_key] = result;
+    document.getElementById('dataload_status').textContent = `Ready!`;
+    document.getElementById('imageUpload').disabled = false;
 }
+
+function quantizeToInt8(float32){
+    // likely this doesn't actually work lol
+    return new Int8Array(float32.map(x => x * 127.5-0.5));
+}
+
 

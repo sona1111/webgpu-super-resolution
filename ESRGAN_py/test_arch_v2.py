@@ -330,17 +330,17 @@ def esrgan(x):
             x5 = eval_conv(f'RRDB_trunk_{i}_RDB{j}_conv5', (rdb_in, x1, x2, x3, x4), relu=False)
             #return x5
             rdb_in = eval_rev_relu(x5, rdb_in)
+            break
             #return rdb_in
 
 
         #return rrdb_in
         rrdb_in = eval_rev_relu(rdb_in, rrdb_in)
-        if(i == 1):
-            return rrdb_in
+        break
         #----------------
 
 
-
+    # trunk_conv result will fit in rdbbuf (192) prealloc, read direct from rrdb_in
 
     trunk = eval_conv('trunk_conv', rrdb_in, relu=False)
 
