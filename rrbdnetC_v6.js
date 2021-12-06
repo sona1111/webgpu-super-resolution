@@ -23,7 +23,8 @@ async function run_nn(input_elem, output_elem){
     const device = await adapter.requestDevice();
 
     const inp_img = getImgDataFromImgElem(input_elem);
-    imagedata2Canvas(inp_img.c, output_elem, inp_img.w, inp_img.h);
+    const original_elem = document.getElementById('original');
+    imagedata2Canvas(inp_img.c, original_elem, inp_img.w, inp_img.h);
     
 
     const shaderModuleInterpolate = device.createShaderModule({
