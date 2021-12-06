@@ -3,13 +3,9 @@ async function read_shader(path){
     return await conv2dc.text();
 }
 
-
-
-
-
 async function run_nn(input_elem, output_elem){
-
     const _modeldata = modeldata[current_network];
+
 
     document.getElementById('imageUpload').disabled = true;
     if (!navigator.gpu) {
@@ -30,15 +26,6 @@ async function run_nn(input_elem, output_elem){
     imagedata2Canvas(inp_img.c, output_elem, inp_img.w, inp_img.h);
     
 
-    const shaderModuleConv = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch.wgsl')
-    });
-    const shaderModuleReLU = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/leakyrelu.wgsl')
-    });
-    const shaderModuleScaleRes = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/scaleandresidual.wgsl')
-    });
     const shaderModuleInterpolate = device.createShaderModule({
         code: await read_shader( 'shaders_f32/interpolate.wgsl')
     });
@@ -50,6 +37,12 @@ async function run_nn(input_elem, output_elem){
     });
     const shaderModuleConvRrdbTwoBuff = device.createShaderModule({
         code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff.wgsl')
+    });
+    const shaderModuleConvRrdbLReLU = device.createShaderModule({
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_lrelu.wgsl')
+    });
+    const shaderModuleConvRrdbTwoBuffLReLU = device.createShaderModule({
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff_lrelu.wgsl')
     });
     const shaderModuleReLURrdb = device.createShaderModule({
         code: await read_shader( 'shaders_f32/leakyrelu_rrdb.wgsl')
@@ -83,36 +76,6 @@ async function run_nn(input_elem, output_elem){
     }
 
     
-
-    function copy_mat_rdb(rdb_in){
-        // for one inner rrdb, we will make two buffers to swap between
-        // for the first we must copy the first rdb_in data to it
-        const gpuArrayRead = device.createBuffer({
-            mappedAtCreation: true,
-            size: Float32Array.BYTES_PER_ELEMENT * (64 + 192) * inp_img.w * inp_img.h,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
-        });
-        const gpuArrayRNGrdb = gpuArrayRead.getMappedRange(0, Float32Array.BYTES_PER_ELEMENT * 64 * inp_img.w * inp_img.h);
-        new Float32Array(gpuArrayRNGrdb).set(rdb_in);
-        gpuArrayRead.unmap();
-        return gpuArrayRead;
-
-    }
-
-    function copy_mat_rrdb(rdb_in){
-        // for one inner rrdb, we will make two buffers to swap between
-        // for the first we must copy the first rdb_in data to it
-        const gpuArrayRead = device.createBuffer({
-            mappedAtCreation: true,
-            size: Float32Array.BYTES_PER_ELEMENT * (64) * inp_img.w * inp_img.h,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-        });
-        const gpuArrayRNGrdb = gpuArrayRead.getMappedRange(0, Float32Array.BYTES_PER_ELEMENT * 64 * inp_img.w * inp_img.h);
-        new Float32Array(gpuArrayRNGrdb).set(rdb_in);
-        gpuArrayRead.unmap();
-        return gpuArrayRead;
-
-    }
 
     function copy_mat_inpimg(img_c_in){
         // for one inner rrdb, we will make two buffers to swap between
@@ -208,158 +171,6 @@ async function run_nn(input_elem, output_elem){
         //Float32Array, GPUBufferUsage.STORAGE
     }
 
-
-    function get_mat_gpu_output(length){
-        // get GPU pointer for an output array
-        const resultMatrixBufferSize = Float32Array.BYTES_PER_ELEMENT * (length); // length + 4?
-        const resultMatrixBuffer = device.createBuffer({
-            size: resultMatrixBufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-        });
-        return resultMatrixBuffer
-    }
-
-    function vstack(arrs){
-        // stack multiple arrs along first axis
-        let total_first_dim = 0;
-        for(let arr of arrs){
-            total_first_dim += (arr.length / inp_img.w / inp_img.h);
-        }
-        const new_arr = new Float32Array(total_first_dim * inp_img.w * inp_img.h);
-
-        let offset = 0;
-        for(let arr of arrs){
-            new_arr.set(arr, offset);
-            offset += arr.length;
-        }
-        return new_arr;
-
-
-    }
-
-
-
-    async function gpuexec_conv(output, input, inputshape, weight, weightshape, bias, offsetw, offsetb, shaderModule) {
-
-        // Pipeline setup
-
-        const bindGroupLayout = device.createBindGroupLayout({
-            entries: [
-                {
-                    binding: 0,
-                    visibility: GPUShaderStage.COMPUTE,
-                    buffer: {
-                        type: "read-only-storage"
-                    }
-                },
-                {
-                    binding: 1,
-                    visibility: GPUShaderStage.COMPUTE,
-                    buffer: {
-                        type: "read-only-storage"
-                    }
-                },
-                {
-                    binding: 2,
-                    visibility: GPUShaderStage.COMPUTE,
-                    buffer: {
-                        type: "read-only-storage"
-                    }
-                },
-                {
-                    binding: 3,
-                    visibility: GPUShaderStage.COMPUTE,
-                    buffer: {
-                        type: "storage"
-                    }
-                },
-                {
-                    binding: 4,
-                    visibility: GPUShaderStage.COMPUTE,
-                    buffer: {
-                        type: "read-only-storage"
-                    }
-                },
-            ]
-        });
-
-        const computePipeline = device.createComputePipeline({
-            layout: device.createPipelineLayout({
-                bindGroupLayouts: [bindGroupLayout]
-            }),
-            compute: {
-                module: shaderModule,
-                entryPoint: "main",
-            }
-        });
-
-        let aux_arr = [inputshape[1], inputshape[2]].concat(inputshape).concat(weightshape).concat([offsetw, offsetb])
-        const channelIdxs = new Int32Array(aux_arr);
-
-        const unifbuffer = copy_mat_gpu(channelIdxs, Int32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
-
-
-        const bindGroup = device.createBindGroup({
-            layout: bindGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: input
-                    }
-                },
-                {
-                    binding: 1,
-                    resource: {
-                        buffer: weight
-                    }
-                },
-                {
-                    binding: 2,
-                    resource: {
-                        buffer: bias
-                    }
-                },
-                {
-                    binding: 3,
-                    resource: {
-                        buffer: output
-                    }
-                },
-                {
-                    binding: 4,
-                    resource: {
-                        buffer: unifbuffer
-                    }
-                }
-            ]
-        });
-
-        // Compute shader code
-
-
-        // Commands submission
-
-        const commandEncoder = device.createCommandEncoder();
-
-        const passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(computePipeline);
-        passEncoder.setBindGroup(0, bindGroup);
-
-        passEncoder.dispatch(inputshape[1], inputshape[2], weightshape[0]);
-        //passEncoder.dispatch(1, 1);
-        //passEncoder.dispatch(1, 1, 1);*
-        passEncoder.endPass();
-
-        // Submit GPU commands.
-        const gpuCommands = commandEncoder.finish();
-        device.queue.submit([gpuCommands]);
-
-        unifbuffer.destroy();
-
-
-
-    }
 
     async function gpuexec_conv_rrdb(buffer, inputshape, weight, weightshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModule) {
 
@@ -593,52 +404,6 @@ async function run_nn(input_elem, output_elem){
 
     }
 
-    async function gpuexec_relu(input, inputSize, shaderModule) {
-        const computePipeline = device.createComputePipeline({
-            compute: {
-              module: shaderModule,
-              entryPoint: "main"
-            }
-          });        
-        
-          // Bind group
-          const matrixSize = new Uint32Array(inputSize);
-  
-          const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
-        
-          const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0 /* index */),
-            entries: [
-              {
-                binding: 0,
-                resource: {
-                  buffer: input
-                }
-              },
-              {
-                binding: 1,
-                resource: {
-                    buffer: unifbuffer
-                }
-              }
-            ]
-          });
-        const commandEncoder = device.createCommandEncoder();
-  
-        const passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(computePipeline);
-        passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
-        const z = Math.ceil(matrixSize[0] / 4); 
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
-        const gpuCommands = commandEncoder.finish();
-        device.queue.submit([gpuCommands]);
-
-        unifbuffer.destroy();
-    }
-
     async function gpuexec_relu_rrdb(writebuf, inputSize, outputOffset, shaderModule) {
         const computePipeline = device.createComputePipeline({
             compute: {
@@ -716,67 +481,6 @@ async function run_nn(input_elem, output_elem){
         await gpuReadBuffer.mapAsync(GPUMapMode.READ);
         const arrayBuffer = gpuReadBuffer.getMappedRange();
         return new Float32Array(arrayBuffer);
-    }
-
-    async function scale_residual(input, output) {
-        inputSize = [input.length / (inp_img.w * inp_img.h), inp_img.h, inp_img.w];
-        const outputBuff =  copy_mat_gpu(output, Float32Array, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
-        const inputBuff = copy_mat_gpu(input, Float32Array, GPUBufferUsage.STORAGE);
-        const outputsize = Float32Array.BYTES_PER_ELEMENT * ((inputSize[0] * inp_img.w * inp_img.h));
-
-
-        const computePipeline = device.createComputePipeline({
-            compute: {
-              module: shaderModuleScaleRes,
-              entryPoint: "main"
-            }
-          });        
-        
-          // Bind group
-          const matrixSize = new Uint32Array(inputSize);
-  
-          const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
-        
-          const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0 /* index */),
-            entries: [
-              {
-                binding: 0,
-                resource: {
-                  buffer: inputBuff
-                }
-              },
-              {
-                binding: 1,
-                resource: {
-                    buffer: outputBuff
-                }
-              },
-              {
-                binding: 2,
-                resource: {
-                    buffer: unifbuffer
-                }
-              }
-            ]
-          });
-        const commandEncoder = device.createCommandEncoder();
-  
-        const passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(computePipeline);
-        passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
-        const z = Math.ceil(matrixSize[0] / 4); 
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
-        const gpuCommands = commandEncoder.finish();
-        device.queue.submit([gpuCommands]);
-        const res =  await gpuexec_readbuf(outputBuff, outputsize);
-        outputBuff.destroy();
-        inputBuff.destroy();
-        unifbuffer.destroy();
-        return res;
     }
 
     async function scale_residual_rrdb(inputBuff, outputBuff, inputOffset, outputOffset, in_ch_count, reverse) {
@@ -912,67 +616,6 @@ async function run_nn(input_elem, output_elem){
         unifbuffer.destroy();
     }
 
-    async function up_resolution(input, input_shape) {
-        inputSize = [input.length / (input_shape[0] * input_shape[1]), input_shape[0], input_shape[1]];
-        const outputBuff =  get_mat_gpu_output(4 * inputSize[0] * input_shape[0] * input_shape[1]);
-        const inputBuff = copy_mat_gpu(input, Float32Array, GPUBufferUsage.STORAGE);
-        const outputsize = Float32Array.BYTES_PER_ELEMENT * ((4 * inputSize[0] * input_shape[0] * input_shape[1]));
-
-
-        const computePipeline = device.createComputePipeline({
-            compute: {
-              module: shaderModuleInterpolate,
-              entryPoint: "main"
-            }
-          });        
-        
-          // Bind group
-          const matrixSize = new Uint32Array(inputSize);
-  
-          const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
-        
-          const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0 /* index */),
-            entries: [
-              {
-                binding: 0,
-                resource: {
-                  buffer: inputBuff
-                }
-              },
-              {
-                binding: 1,
-                resource: {
-                    buffer: outputBuff
-                }
-              },
-              {
-                binding: 2,
-                resource: {
-                    buffer: unifbuffer
-                }
-              }
-            ]
-          });
-        const commandEncoder = device.createCommandEncoder();
-  
-        const passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(computePipeline);
-        passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
-        const z = Math.ceil(matrixSize[0] / 4); 
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
-        const gpuCommands = commandEncoder.finish();
-        device.queue.submit([gpuCommands]);
-        const res = await gpuexec_readbuf(outputBuff, outputsize);
-        outputBuff.destroy();
-        inputBuff.destroy();
-        unifbuffer.destroy();
-        return res;
-    }
-
     async function up_resolution_dyn(inputBuff, outputBuff, inputSize) {
         //inputSize = [input.length / (input_shape[0] * input_shape[1]), input_shape[0], input_shape[1]];
         //const inputSize = [in_ch_count, inp_img.h, inp_img.w];
@@ -1035,62 +678,34 @@ async function run_nn(input_elem, output_elem){
         //return res;
     }
 
-    async function conv_fwd(inp, inp_shape, weight, wshape, offsetw, bias, bshape, offsetb, relu){
-        if(Array.isArray(inp)){  // not float32 array, standard JS array
-            inp = vstack(inp);
-        }
-        const output =  get_mat_gpu_output(wshape[0] * inp_shape[0] * inp_shape[1]);
-        const input = copy_mat_gpu(inp, Float32Array, GPUBufferUsage.STORAGE);
-        const outputsize = Float32Array.BYTES_PER_ELEMENT * ((wshape[0] * inp_shape[0] * inp_shape[1]));
-
-        const in_ch_count = inp.length / (inp_shape[0] * inp_shape[1]);
-
-        await gpuexec_conv(output, input, [in_ch_count, inp_shape[1], inp_shape[0]],
-            weight, wshape, bias, offsetw, offsetb, shaderModuleConv);
-
-        if (relu) {
-            await gpuexec_relu(output, [wshape[0], inp_shape[0], inp_shape[1]], shaderModuleReLU)
-        }
-        const res = await gpuexec_readbuf(output, outputsize);
-        output.destroy();
-        input.destroy();
-        return res;
-    }
-
     async function conv_fwd_rrdb(inputBuff, outputBuff, in_ch_count, inp_shape, weight, wshape, offsetw, bias, bshape, offsetb, inputOffset, outputOffset, relu, dbg){
-
+        
         if(inputBuff === outputBuff){
-            await gpuexec_conv_rrdb(outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
-                weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdb);
+            if (relu) {
+                await gpuexec_conv_rrdb(outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdbLReLU);
+            } else {
+                await gpuexec_conv_rrdb(outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdb);
+            }            
         }else{
-            await gpuexec_conv_rrdb_twobuff(inputBuff, outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
-                weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdbTwoBuff);
+            if (relu) {
+                await gpuexec_conv_rrdb_twobuff(inputBuff, outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdbTwoBuffLReLU);
+            } else {
+                await gpuexec_conv_rrdb_twobuff(inputBuff, outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdbTwoBuff);
+            }
         }
-        if (relu) {
-            await gpuexec_relu_rrdb(outputBuff, [wshape[0], inp_shape[0], inp_shape[1]], outputOffset, shaderModuleReLURrdb)
-        }
+        // if (relu) {
+        //     await gpuexec_relu_rrdb(outputBuff, [wshape[0], inp_shape[0], inp_shape[1]], outputOffset, shaderModuleReLURrdb)
+        // }
     }
 
     async function esrgan(){
 
 
         const layerdatabufs = await preloadWeightsAndBias(_modeldata);
-
-        async function eval_conv(name, inp, inp_shape, relu){
-            //console.log(_modeldata[name])
-            console.log(name);
-            return await conv_fwd(
-                inp,
-                inp_shape,
-                layerdatabufs.wbuf,
-                _modeldata[name].wshape,
-                layerdatabufs.offsetsw[name],
-                layerdatabufs.bbuf,
-                _modeldata[name].bshape,
-                layerdatabufs.offsetsb[name],
-                relu
-            );
-        }
 
         async function eval_conv_rrdb(name, inputBuff, outputBuff, in_ch_count, inputOffset, outputOffset, inp_shape, relu, dbg){
             //console.log(_modeldata[name])
