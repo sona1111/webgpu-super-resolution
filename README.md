@@ -22,3 +22,6 @@ Use the same buffer/uniform for matrix size?
 
 --max_old_space_size=30000
 
+Bindgroup layout slower if auto infer
+Dispatch size reduce by 4
+Layer fusion
