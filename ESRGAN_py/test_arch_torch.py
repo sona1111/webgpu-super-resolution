@@ -441,7 +441,7 @@ class ESRGAN(nn.Module):
     def forward(self, x):
 
         fea = self.conv_first(x)
-        return fea
+        #return fea
 
         x_o = fea
 
@@ -470,7 +470,7 @@ class ESRGAN(nn.Module):
         x = x5 * 0.2 + x
         x_o = x * 0.2 + x_o
         #----------
-        return x_o
+        #return x_o
 
         #----------
         x1 = self.lrelu(self.RRDB_trunk_1_RDB1_conv1(x_o))
@@ -1017,10 +1017,13 @@ class ESRGAN(nn.Module):
         x_o = x * 0.2 + x_o
         #----------
 
+
         trunk = self.trunk_conv(x_o)
 
 
+
         fea = fea + trunk
+        return fea
 
 
         fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
