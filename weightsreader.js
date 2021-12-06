@@ -46,6 +46,9 @@ function getLDBAsync(key) {
 }
 
 async function storeModelData(store_key, url){
+    if(store_key in modeldata){
+        return;
+    }
     document.getElementById('imageUpload').disabled = true;
     document.getElementById('dataload_status').textContent = `Downloading ${store_key}...`;
     let meta = await makeRequest("GET", `${url}/modelinfo.json`, 'json');

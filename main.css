@@ -1,0 +1,12 @@
+#clientinfodata{
+    height: 10em;
+}
+
+.rainbow-text {
+    background-image: linear-gradient(to left, violet, indigo, blue, green, yellow, orange, red);   -webkit-background-clip: text;
+    color: transparent;
+}
+
+#download_progress{
+    width:100%;
+}

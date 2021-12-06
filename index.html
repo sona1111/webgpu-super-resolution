@@ -2,30 +2,196 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link rel="stylesheet" href="main.css">
     <title>WebGPU Super Resolution Inference</title>
     <script>
         let modeldata = {};
+        let current_network = null;
     </script>
     <script src="localStorageDB.min.js"></script>
     <script src="weightsreader.js"></script>
 </head>
 <body>
+<nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand rainbow-text" href="#">Awesome</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+            <ul class="nav navbar-nav">
+                <li class="active"><a href="#">Super Resolution</a></li>
+                <li><a href="#about">About</a></li>
+<!--                <li><a href="#contact">Contact</a></li>-->
+<!--                <li class="dropdown">-->
+<!--                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Dropdown <span class="caret"></span></a>-->
+<!--                    <ul class="dropdown-menu">-->
+<!--                        <li><a href="#">Action</a></li>-->
+<!--                        <li><a href="#">Another action</a></li>-->
+<!--                        <li><a href="#">Something else here</a></li>-->
+<!--                        <li role="separator" class="divider"></li>-->
+<!--                        <li class="dropdown-header">Nav header</li>-->
+<!--                        <li><a href="#">Separated link</a></li>-->
+<!--                        <li><a href="#">One more separated link</a></li>-->
+<!--                    </ul>-->
+<!--                </li>-->
+            </ul>
+        </div><!--/.nav-collapse -->
+    </div>
+</nav>
 
-    <img src="baboon_sm.png" id="sm_img" crossorigin="anonymous" style="display: none;">
-    <button type="button" id="demo1">Test Small Image</button>
-    <img src="baboon.png" id="med_img" crossorigin="anonymous" style="display: none;">
-    <button type="button" id="demo2">Test Medium Image</button>
-    <img src="1000x1000.png" id="lrg_img" crossorigin="anonymous" style="display: none;">
-    <button type="button" id="demo3">Test Large Image</button>
-    <canvas id="result"></canvas>
-    <input id="imageUpload" name="imageUpload" type="file">
+    <div class="container">
 
-    <progress id="download_progress" value=""></progress>
-    <pre id="dataload_status">Init...</pre>
+        <div class="jumbotron">
+            <div class="col-sm-3">
+                <img src="static/img/webgpu_128.png">
+            </div>
+            <div class="col-sm-9">
+                <h3>Client side WebGPU Super Resolution with <a href="https://github.com/xinntao/ESRGAN">ESRGAN</a>!</h3>
+            </div>
+
+            <div class="col-sm-12" style="margin-bottom: -40px;">
+            <div id="clientinfopanel" class="panel">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Client Info</h3>
+                </div>
+                <div class="panel-body">
+                    <pre id="clientinfodata">
+
+                    </pre>
+                </div>
+            </div>
+            </div>
+            <br style="clear: both">
+        </div>
+
+        <hr style="clear: both">
+        <div class="col-md-12">
+            <progress id="download_progress" value=""></progress>
+            <pre id="dataload_status">Init...</pre>
+        </div>
+        <hr style="clear: both">
+        <div class="col-md-12" id="networksList">
+            <div class="col-sm-2">
+                <div class="panel panel-default networkpanel">
+                    <div class="panel-body text-center">
+                        <h6>RRDB ESRGAN</h6>
+                        <img style="width: 100%;" src="static/img/nn_esrgan.png">
+                        <button class="btn btn-primary btn-sm networkload" data-networkname="RRDB_ESRGAN_x4" disabled>LOAD</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-2">
+                <div class="panel panel-default networkpanel">
+                    <div class="panel-body text-center">
+                        <h6>RRDB PSNR</h6>
+                        <img style="width: 100%;" src="static/img/nn_psnr.png">
+                        <button class="btn btn-primary btn-sm networkload" data-networkname="RRDB_PSNR_x4" disabled>LOAD</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <br style="clear: both">
+
+        <div class="col-md-12">
+            <div class="col-md-3">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Demo ESRGAN</h3>
+                    </div>
+                    <div class="panel-body">
+                        <img src="baboon_sm.png" id="sm_img" class="btn btn-default" crossorigin="anonymous" style="display: none;">
+                        <button type="button" id="demo1" disabled>Test Small Image</button>
+                        <img src="baboon.png" id="med_img" class="btn btn-default" crossorigin="anonymous" style="display: none;">
+                        <button type="button" id="demo2" disabled>Test Medium Image</button>
+                        <img src="1000x1000.png" id="lrg_img" class="btn btn-default" crossorigin="anonymous" style="display: none;">
+                        <button type="button" id="demo3" disabled>Test Large Image</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Result</h3>
+                    </div>
+                    <div class="panel-body">
+                        <canvas id="result"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12">
+            <div class="col-md-3">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Upload your own image</h3>
+                    </div>
+                    <div class="panel-body">
+                        <input id="imageUpload" name="imageUpload" type="file" disabled>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Result</h3>
+                    </div>
+                    <div class="panel-body">
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+
+
+
 
     <script src="utils.js"></script>
     <script src="rrbdnetC_v6.js"></script>
     <script src="main.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script>
+        async function main(){
+            if(await populateWebGpuInfo()){
+                document.getElementById('clientinfopanel').classList.add('panel-success');
+
+                $('#networksList .networkload').prop('disabled', false);
+
+                initmain();
+            }else{
+                document.getElementById('clientinfopanel').classList.add('panel-danger');
+            }
+
+            $('#networksList .networkload').click(async function(){
+                $('.networkpanel').css('background-color', '');
+
+                //$('.networkpanel').removeclass('panel-default');
+                //$('.networkpanel').removeclass('panel-success');
+
+                const networkname = $(this).data('networkname');
+                await storeModelData(networkname, `ESRGAN_py/${networkname}`);
+                current_network = networkname;
+                $(this).closest('.networkpanel').css('background-color', '#dff0d8');
+                $('#imageUpload, #demo1, #demo2, #demo3').prop('disabled', false);
+            })
+        }
+        main();
+    </script>
+
+
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 </body>
 </html>

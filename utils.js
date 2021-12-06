@@ -102,3 +102,46 @@ function imagedataHalf2Canvas(array, elem, width, height){
     ctx.putImageData(imgData, 0, 0);
 
 }
+
+async function populateWebGpuInfo(){
+    const elem = document.getElementById('clientinfodata');
+    let outstr = 'navigator.gpu: ';
+    if (!navigator.gpu) {
+        outstr += '✖\n';
+        elem.textContent = outstr;
+        return false;
+    }else{
+        outstr += '✓\n';
+    }
+
+    //const adapter = await navigator.gpu.requestAdapter();
+    outstr += 'adapter: '
+    const adapter = await navigator.gpu.requestAdapter({powerPreference: "high-performance"});
+    if (!adapter) {
+        outstr += '✖\n';
+        elem.textContent = outstr;
+        return false;
+    }else{
+        outstr += '✓\n';
+    }
+
+    outstr += 'device: '
+    const device = await adapter.requestDevice();
+    if (!device) {
+        outstr += '✖\n';
+        elem.textContent = outstr;
+        return false;
+    }else{
+        outstr += '✓\n';
+    }
+
+    outstr += 'limits:\n'
+    for(let limitkey in device.limits){
+        outstr += `\t${limitkey}: ${device.limits[limitkey]}\n`
+    }
+
+    elem.textContent = outstr;
+    return true;
+
+
+}
