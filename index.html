@@ -165,7 +165,7 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     <script>
         async function main(){
-            if(populateWebGpuInfo()){
+            if(await populateWebGpuInfo()){
                 document.getElementById('clientinfopanel').classList.add('panel-success');
 
                 $('#networksList .networkload').prop('disabled', false);
