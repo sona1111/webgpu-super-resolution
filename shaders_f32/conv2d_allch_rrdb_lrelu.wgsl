@@ -41,6 +41,9 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
     //for (var co = 0; co < ufs.kernSizes[0]; co = co + 1) { //ufs.kernSizes[0]
 
     var result = 0.0;
+    var outmost_dim = u32(co) * u32(ufs.kernSizes[1]) * u32(ufs.kernSizes[2]) * u32(ufs.kernSizes[3]);
+    var kernel_area = u32(ufs.kernSizes[2]) * u32(ufs.kernSizes[3]);
+    var image_area = u32(ufs.inputSizes[1]) * u32(ufs.inputSizes[2]);
     for (var z = 0; z < ufs.inputSizes[0]; z = z + 1) {
         for (var i = -1; i < 2; i = i + 1) {
             for (var j = -1; j < 2; j = j + 1) {
@@ -48,11 +51,11 @@ fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
                 if(y+i < 0 || x+j < 0 || y+i >= ufs.outputSizes[1] || x+j >= ufs.outputSizes[0]){
                     continue;
                 }
-                let kernIndex = u32(co) * u32(ufs.kernSizes[1]) * u32(ufs.kernSizes[2]) * u32(ufs.kernSizes[3]) +
-                                u32(z) * u32(ufs.kernSizes[2]) * u32(ufs.kernSizes[3]) +
+                let kernIndex = outmost_dim +
+                                u32(z) * kernel_area+
                                 u32(i+1) * u32(ufs.kernSizes[3]) +
                                 u32(j+1);
-                let imageIndex = u32(z) * u32(ufs.inputSizes[1]) * u32(ufs.inputSizes[2]) +
+                let imageIndex = u32(z) * image_area +
                                  u32(y+i) * u32(ufs.inputSizes[1]) +
                                  u32(x+j);
                 //resultImage.numbers[dbg_idx] = f32(inputImage.numbers[imageIndex]);
