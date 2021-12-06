@@ -3,7 +3,9 @@ async function read_shader(path){
     return await conv2dc.text();
 }
 
-async function run_nn(input_elem, output_elem, _modeldata){
+async function run_nn(input_elem, output_elem){
+    const _modeldata = modeldata[current_network];
+
 
     document.getElementById('imageUpload').disabled = true;
     if (!navigator.gpu) {
