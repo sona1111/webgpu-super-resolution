@@ -20,8 +20,10 @@ async function run_nn(input_elem, output_elem){
       console.log("Failed to get GPU adapter.");
       return;
     }
-    const device = await adapter.requestDevice();
-
+    // const device = await adapter.requestDevice();
+    console.log(adapter.limits.maxStorageBufferBindingSize)
+    const device = await adapter.requestDevice({'requiredLimits':{'maxStorageBufferBindingSize': adapter.limits.maxStorageBufferBindingSize}});
+    console.log(device)
     const inp_img = getImgDataFromImgElem(input_elem);
     const original_elem = document.getElementById('original');
     imagedata2Canvas(inp_img.c, original_elem, inp_img.w, inp_img.h);
