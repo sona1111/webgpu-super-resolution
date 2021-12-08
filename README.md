@@ -14,7 +14,7 @@ WebGPU Image Super Resolution
 
 ## Live Online
 
-[![](img/demo.gif)](https://sona1111.github.io/webgpu-super-resolution/)
+[![](img/Demo.gif)](https://sona1111.github.io/webgpu-super-resolution/)
 
 ## Introduction
 
