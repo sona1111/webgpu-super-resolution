@@ -20,7 +20,11 @@ async function run_nn(input_elem, output_elem){
       console.log("Failed to get GPU adapter.");
       return;
     }
-    const device = await adapter.requestDevice();
+    const device = await adapter.requestDevice({
+        'requiredLimits':{
+            'maxStorageBufferBindingSize': adapter.limits.maxStorageBufferBindingSize
+        }
+    });
 
     const inp_img = getImgDataFromImgElem(input_elem);
     const original_elem = document.getElementById('original');
@@ -405,53 +409,6 @@ async function run_nn(input_elem, output_elem){
 
     }
 
-    async function gpuexec_relu_rrdb(writebuf, inputSize, outputOffset, shaderModule) {
-        const computePipeline = device.createComputePipeline({
-            compute: {
-                module: shaderModule,
-                entryPoint: "main"
-            }
-        });
-
-        // Bind group
-        const matrixSize = new Uint32Array(inputSize.concat([outputOffset]));
-
-        const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
-
-        const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0 /* index */),
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: writebuf
-                    }
-                },
-                {
-                    binding: 1,
-                    resource: {
-                        buffer: unifbuffer
-                    }
-                }
-            ]
-        });
-        const commandEncoder = device.createCommandEncoder();
-
-        const passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(computePipeline);
-        passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(inputSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(inputSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
-        const z = Math.ceil(inputSize[0] / 4);
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
-        const gpuCommands = commandEncoder.finish();
-        device.queue.submit([gpuCommands]);
-
-        unifbuffer.destroy();
-    }
-
-
     async function gpuexec_readbuf(output, outputsize, offset){
         const commandEncoder = device.createCommandEncoder();
 
@@ -484,7 +441,7 @@ async function run_nn(input_elem, output_elem){
         return new Float32Array(arrayBuffer);
     }
 
-    async function scale_residual_rrdb(inputBuff, outputBuff, inputOffset, outputOffset, in_ch_count, reverse) {
+    async function scale_residual_rrdb(inputBuff, outputBuff, inputOffset, outputOffset, in_ch_count) {
         const inputSize = [in_ch_count, inp_img.h, inp_img.w];
 
 
@@ -497,8 +454,27 @@ async function run_nn(input_elem, output_elem){
 
         let entries;
         let module;
+        let bindGroupLayout;
         if(inputBuff === outputBuff){
             module = shaderModuleScaleResRrdbInplace;
+            bindGroupLayout = device.createBindGroupLayout({
+                entries: [
+                    {
+                        binding: 0,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: {
+                            type: "storage"
+                        }
+                    },
+                    {
+                        binding: 1,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: {
+                            type: "read-only-storage"
+                        }
+                    },
+                ]
+            });
             entries = [
                 {
                     binding: 0,
@@ -515,6 +491,31 @@ async function run_nn(input_elem, output_elem){
             ]
         }else{
             module = shaderModuleScaleResRrdb;
+            bindGroupLayout = device.createBindGroupLayout({
+                entries: [
+                    {
+                        binding: 0,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: {
+                            type: "read-only-storage"
+                        }
+                    },
+                    {
+                        binding: 1,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: {
+                            type: "storage"
+                        }
+                    },
+                    {
+                        binding: 2,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: {
+                            type: "read-only-storage"
+                        }
+                    },
+                ]
+            });
             entries = [
                 {
                     binding: 0,
@@ -538,6 +539,9 @@ async function run_nn(input_elem, output_elem){
         }
 
         const computePipeline = device.createComputePipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [bindGroupLayout]
+            }),
             compute: {
                 module: module,
                 entryPoint: "main"
@@ -545,7 +549,7 @@ async function run_nn(input_elem, output_elem){
         });
 
         const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0 /* index */),
+            layout: bindGroupLayout,
             entries: entries
         });
         const commandEncoder = device.createCommandEncoder();
@@ -567,7 +571,36 @@ async function run_nn(input_elem, output_elem){
     async function matrix_addition(inputBuff, outputBuff, in_ch_count) {
         const inputSize = [in_ch_count, inp_img.h, inp_img.w];
 
+        const bindGroupLayout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {
+                        type: "read-only-storage"
+                    }
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {
+                        type: "storage"
+                    }
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {
+                        type: "read-only-storage"
+                    }
+                },
+            ]
+        });
+
         const computePipeline = device.createComputePipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [bindGroupLayout]
+            }),
             compute: {
               module: shaderModuleAddition,
               entryPoint: "main"
@@ -580,7 +613,7 @@ async function run_nn(input_elem, output_elem){
           const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
         
           const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0 /* index */),
+            layout: bindGroupLayout,
             entries: [
               {
                 binding: 0,
@@ -623,9 +656,36 @@ async function run_nn(input_elem, output_elem){
         // const outputBuff =  get_mat_gpu_output(4 * inputSize[0] * input_shape[0] * input_shape[1]);
         // const inputBuff = copy_mat_gpu(input, Float32Array, GPUBufferUsage.STORAGE);
         // const outputsize = Float32Array.BYTES_PER_ELEMENT * ((4 * inputSize[0] * input_shape[0] * input_shape[1]));
-
+        const bindGroupLayout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {
+                        type: "read-only-storage"
+                    }
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {
+                        type: "storage"
+                    }
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {
+                        type: "read-only-storage"
+                    }
+                },
+            ]
+        });
 
         const computePipeline = device.createComputePipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts: [bindGroupLayout]
+            }),
             compute: {
                 module: shaderModuleInterpolate,
                 entryPoint: "main"
@@ -638,7 +698,7 @@ async function run_nn(input_elem, output_elem){
         const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
 
         const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0 /* index */),
+            layout: bindGroupLayout,
             entries: [
                 {
                     binding: 0,
@@ -730,10 +790,14 @@ async function run_nn(input_elem, output_elem){
         await eval_conv_rrdb('conv_first', inpImgBuf, feaBuf, 3, 0, 0, [inp_img.h, inp_img.w], false);
         inpImgBuf.destroy();
 
+
+
+
         const rbd_swapbuf = get_mat_empty(64 + 192);
         const rrbd_swapbuf = get_mat_empty(64);
         device2device(feaBuf, 0, rbd_swapbuf, 0, (64) * inp_img.w * inp_img.h);
         device2device(feaBuf, 0, rrbd_swapbuf, 0, (64) * inp_img.w * inp_img.h);
+
         //console.log(fea)
         for (let rrdb_chunk = 0; rrdb_chunk < 23; rrdb_chunk++) {
             //let rdb_in = rrdb_in;
@@ -766,6 +830,8 @@ async function run_nn(input_elem, output_elem){
 
                 await scale_residual_rrdb(rbd_swapbuf, rbd_swapbuf, (192) * inp_img.w * inp_img.h, 0, 64);
 
+
+
             }
 
             await scale_residual_rrdb(rbd_swapbuf, rrbd_swapbuf, 0,(0) * inp_img.w * inp_img.h, 64);
@@ -774,6 +840,8 @@ async function run_nn(input_elem, output_elem){
             }
 
         }
+
+
         //rdb_swafbuf.destroy()
         //rrdb_swafbuf.destroy()
         //rrdb_in = await gpuexec_readbuf(rrbd_swapbuf, Float32Array.BYTES_PER_ELEMENT * (64) * inp_img.w * inp_img.h,  (0) * inp_img.w * inp_img.h);

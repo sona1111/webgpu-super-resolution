@@ -11,7 +11,7 @@
 [[group(0), binding(0)]] var<storage, read> inputImage : Matrix;
 [[group(0), binding(1)]] var<storage, read> inputKernel : Matrix;
 [[group(0), binding(2)]] var<storage, read> inputBias : Array;
-[[group(0), binding(3)]] var<storage, write> resultImage : Matrix;
+[[group(0), binding(3)]] var<storage, read_write> resultImage : Matrix;
 
 
 [[stage(compute), workgroup_size(4, 4, 4)]]
