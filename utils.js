@@ -126,7 +126,10 @@ async function populateWebGpuInfo(){
     }
 
     outstr += 'device: '
-    const device = await adapter.requestDevice();
+    const device = await adapter.requestDevice(
+        {'requiredLimits':
+            {'maxStorageBufferBindingSize': adapter.limits.maxStorageBufferBindingSize}
+        });
     if (!device) {
         outstr += '✖\n';
         elem.textContent = outstr;

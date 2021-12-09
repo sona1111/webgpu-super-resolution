@@ -409,6 +409,53 @@ async function run_nn(input_elem, output_elem){
 
     }
 
+    async function gpuexec_relu_rrdb(writebuf, inputSize, outputOffset, shaderModule) {
+        const computePipeline = device.createComputePipeline({
+            compute: {
+                module: shaderModule,
+                entryPoint: "main"
+            }
+        });
+
+        // Bind group
+        const matrixSize = new Uint32Array(inputSize.concat([outputOffset]));
+
+        const unifbuffer = copy_mat_gpu(matrixSize, Uint32Array, GPUBufferUsage.STORAGE) //  | GPUBufferUsage.COPY_DST
+
+        const bindGroup = device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0 /* index */),
+            entries: [
+                {
+                    binding: 0,
+                    resource: {
+                        buffer: writebuf
+                    }
+                },
+                {
+                    binding: 1,
+                    resource: {
+                        buffer: unifbuffer
+                    }
+                }
+            ]
+        });
+        const commandEncoder = device.createCommandEncoder();
+
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(computePipeline);
+        passEncoder.setBindGroup(0, bindGroup);
+        const x = Math.ceil(inputSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
+        const y = Math.ceil(inputSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const z = Math.ceil(inputSize[0] / 4);
+        passEncoder.dispatch(x, y, z);
+        passEncoder.endPass();
+        const gpuCommands = commandEncoder.finish();
+        device.queue.submit([gpuCommands]);
+
+        unifbuffer.destroy();
+    }
+
+
     async function gpuexec_readbuf(output, outputsize, offset){
         const commandEncoder = device.createCommandEncoder();
 
@@ -830,8 +877,6 @@ async function run_nn(input_elem, output_elem){
 
                 await scale_residual_rrdb(rbd_swapbuf, rbd_swapbuf, (192) * inp_img.w * inp_img.h, 0, 64);
 
-
-
             }
 
             await scale_residual_rrdb(rbd_swapbuf, rrbd_swapbuf, 0,(0) * inp_img.w * inp_img.h, 64);
@@ -840,8 +885,6 @@ async function run_nn(input_elem, output_elem){
             }
 
         }
-
-
         //rdb_swafbuf.destroy()
         //rrdb_swafbuf.destroy()
         //rrdb_in = await gpuexec_readbuf(rrbd_swapbuf, Float32Array.BYTES_PER_ELEMENT * (64) * inp_img.w * inp_img.h,  (0) * inp_img.w * inp_img.h);
