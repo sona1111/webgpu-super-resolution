@@ -139,8 +139,8 @@ async function populateWebGpuInfo(){
     }
 
     outstr += 'limits:\n'
-    for(let limitkey in device.limits){
-        outstr += `\t${limitkey}: ${device.limits[limitkey]}\n`
+    for(let limitkey in adapter.limits){
+        outstr += `\t${limitkey}: ${adapter.limits[limitkey]}\n`
     }
 
     elem.textContent = outstr;

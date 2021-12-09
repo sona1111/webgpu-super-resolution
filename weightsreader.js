@@ -65,7 +65,7 @@ async function storeModelData(store_key, url){
 
         const alreadyExist = await getLDBAsync(`${url}/${layer.name}`);
         if(alreadyExist){
-            console.log(`using cached ${url}/${layer.name}`)
+            //console.log(`using cached ${url}/${layer.name}`)
             result[layer.name] = JSON.parse(alreadyExist);
             result[layer.name].w = await getLDBAsync(`${url}/${layer.name}/w`);
             result[layer.name].b = await getLDBAsync(`${url}/${layer.name}/b`);
