@@ -3,7 +3,7 @@ async function read_shader(path){
     return await conv2dc.text();
 }
 
-async function run_nn(input_elem, output_elem){
+async function run_nn(input_elem, output_elem, status_elem, gpumem_elem){
     const _modeldata = modeldata[current_network];
 
 
@@ -26,10 +26,40 @@ async function run_nn(input_elem, output_elem){
         }
     });
 
+    let gpu_memory_used = 0;
     const inp_img = getImgDataFromImgElem(input_elem);
     const original_elem = document.getElementById('original');
     imagedata2Canvas(inp_img.c, original_elem, inp_img.w, inp_img.h);
-    
+
+    function status(msg){
+        status_elem.textContent += '\n' + msg;
+        status_elem.scrollTop = status_elem.scrollHeight;
+    }
+
+    function updategpumem(amount){
+        gpu_memory_used += amount;
+        gpumem_elem.textContent = `${gpu_memory_used/1000/1000} Mb`;
+    }
+
+    function allocateGPUArray(mappedAtCreation, size, usage){
+        const gpuArray = device.createBuffer({
+            mappedAtCreation: mappedAtCreation,
+            size: size,
+            usage: usage
+        });
+
+        gpuArray._size = size;
+        updategpumem(size);
+        status(`Allocated GPU array with size ${size/1000/1000} Mb`);
+        return gpuArray;
+    }
+
+    function freeGPUArray(array){
+        array.destroy();
+        updategpumem(-array._size);
+    }
+
+
 
     const shaderModuleInterpolate = device.createShaderModule({
         code: await read_shader( 'shaders_f32/interpolate.wgsl')
@@ -63,11 +93,12 @@ async function run_nn(input_elem, output_elem){
     function copy_mat_gpu(floatArr, arrclass, usage){
         // get GPU pointer for CPU float32 array and copy data to it
         // Need to change this if we are doing quantization
-        const gpuArray = device.createBuffer({
-            mappedAtCreation: true,
-            size: floatArr.byteLength,
-            usage: usage
-        });
+
+        const gpuArray = allocateGPUArray(
+            true,
+            floatArr.byteLength,
+            usage
+        );
         const gpuArrayRNG = gpuArray.getMappedRange();
         new arrclass(gpuArrayRNG).set(floatArr);
         gpuArray.unmap();
@@ -78,28 +109,28 @@ async function run_nn(input_elem, output_elem){
     function copy_mat_inpimg(img_c_in){
         // for one inner rrdb, we will make two buffers to swap between
         // for the first we must copy the first rdb_in data to it
-        const gpuArrayRead = device.createBuffer({
-            mappedAtCreation: true,
-            size: Float32Array.BYTES_PER_ELEMENT * (3) * inp_img.w * inp_img.h,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-        });
+        const gpuArrayRead = allocateGPUArray(
+            true,
+            Float32Array.BYTES_PER_ELEMENT * (3) * inp_img.w * inp_img.h,
+            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        );
         const gpuArrayRNGrdb = gpuArrayRead.getMappedRange(0, Float32Array.BYTES_PER_ELEMENT * 3 * inp_img.w * inp_img.h);
         new Float32Array(gpuArrayRNGrdb).set(img_c_in);
         gpuArrayRead.unmap();
         return gpuArrayRead;
-
     }
 
-    function get_mat_empty(ch_size, width, height){
+    function get_mat_empty(ch_size, width, height, usage){
         const w = width === undefined ? inp_img.w : width;
         const h = height === undefined ? inp_img.h : height;
+        const _usage = usage === undefined ? GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST : usage;
         // for one inner rrdb, we will make two buffers to swap between
         // for the first we must copy the first rdb_in data to it
-        const gpuArrayRead = device.createBuffer({
-            mappedAtCreation: false,
-            size: Float32Array.BYTES_PER_ELEMENT * (ch_size) * w * h,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
-        });
+        const gpuArrayRead = allocateGPUArray(
+            false,
+            Float32Array.BYTES_PER_ELEMENT * (ch_size) * w * h,
+            _usage
+        );
         return gpuArrayRead;
     }
 
@@ -119,6 +150,8 @@ async function run_nn(input_elem, output_elem){
         device.queue.submit([copyCommands]);
     }
 
+
+
     function preloadWeightsAndBias(_modeldata){
         // allocate one large gpu array for weights and one for bias
         const offsetsw = {};
@@ -135,16 +168,18 @@ async function run_nn(input_elem, output_elem){
             sizesb[layername] = _modeldata[layername].b.length
             offsetb += _modeldata[layername].b.length;
         }
-        const gpuArrayWeight = device.createBuffer({
-            mappedAtCreation: true,
-            size: Float32Array.BYTES_PER_ELEMENT * offsetw,
-            usage: GPUBufferUsage.STORAGE
-        });
-        const gpuArrayBias = device.createBuffer({
-            mappedAtCreation: true,
-            size: Float32Array.BYTES_PER_ELEMENT * offsetb,
-            usage: GPUBufferUsage.STORAGE
-        });
+
+
+        const gpuArrayWeight = allocateGPUArray(
+            true,
+            Float32Array.BYTES_PER_ELEMENT * offsetw,
+            GPUBufferUsage.STORAGE
+        );
+        const gpuArrayBias = allocateGPUArray(
+            true,
+            Float32Array.BYTES_PER_ELEMENT * offsetb,
+            GPUBufferUsage.STORAGE
+        );
 
         for(let layername in _modeldata){
             const gpuArrayRNGW = gpuArrayWeight.getMappedRange(Float32Array.BYTES_PER_ELEMENT * offsetsw[layername],
@@ -275,7 +310,7 @@ async function run_nn(input_elem, output_elem){
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
 
-        unifbuffer.destroy();
+        freeGPUArray(unifbuffer);
 
 
 
@@ -396,7 +431,7 @@ async function run_nn(input_elem, output_elem){
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
 
-        unifbuffer.destroy();
+        freeGPUArray(unifbuffer);
 
 
 
@@ -410,10 +445,19 @@ async function run_nn(input_elem, output_elem){
         }
 
         // Get a GPU buffer for reading in an unmapped state.
+
+        // I don't use 'allocateGPUArray' because it seems that mapped arrays are actually CPU side?
         const gpuReadBuffer = device.createBuffer({
+            mappedAtCreation: false,
             size: outputsize,
             usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
         });
+
+        // const gpuReadBuffer = allocateGPUArray(
+        //     false,
+        //     outputsize,
+        //     GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        // );
 
         // Encode commands for copying buffer to buffer.
         commandEncoder.copyBufferToBuffer(
@@ -431,7 +475,9 @@ async function run_nn(input_elem, output_elem){
         // Read buffer.
         await gpuReadBuffer.mapAsync(GPUMapMode.READ);
         const arrayBuffer = gpuReadBuffer.getMappedRange();
-        return new Float32Array(arrayBuffer);
+        const read_data = new Float32Array(arrayBuffer);
+        //freeGPUArray(gpuReadBuffer);
+        return read_data;
     }
 
     function scale_residual_rrdb(inputBuff, outputBuff, inputOffset, outputOffset, in_ch_count) {
@@ -557,7 +603,7 @@ async function run_nn(input_elem, output_elem){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
-        unifbuffer.destroy();
+        freeGPUArray(unifbuffer);
 
     }
 
@@ -640,7 +686,7 @@ async function run_nn(input_elem, output_elem){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
-        unifbuffer.destroy();
+        freeGPUArray(unifbuffer);
     }
 
     function up_resolution_dyn(inputBuff, outputBuff, inputSize) {
@@ -725,11 +771,9 @@ async function run_nn(input_elem, output_elem){
         passEncoder.endPass();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
-        //const res = await gpuexec_readbuf(outputBuff, outputsize);
-        // outputBuff.destroy();
-        // inputBuff.destroy();
-        unifbuffer.destroy();
-        //return res;
+
+        freeGPUArray(unifbuffer);
+
     }
 
     function conv_fwd_rrdb(inputBuff, outputBuff, in_ch_count, inp_shape, weight, wshape, offsetw, bias, bshape, offsetb, inputOffset, outputOffset, relu, dbg){
@@ -763,7 +807,7 @@ async function run_nn(input_elem, output_elem){
 
         function eval_conv_rrdb(name, inputBuff, outputBuff, in_ch_count, inputOffset, outputOffset, inp_shape, relu, dbg){
             //console.log(_modeldata[name])
-            console.log(name);
+            //console.log(name);
             return conv_fwd_rrdb(
                 inputBuff, outputBuff,
                 in_ch_count, inp_shape,
@@ -781,10 +825,7 @@ async function run_nn(input_elem, output_elem){
         const feaBuf = get_mat_empty(64);
         const inpImgBuf = copy_mat_inpimg(inp_img.c);
         eval_conv_rrdb('conv_first', inpImgBuf, feaBuf, 3, 0, 0, [inp_img.h, inp_img.w], false);
-        inpImgBuf.destroy();
-
-
-
+        freeGPUArray(inpImgBuf);
 
         const rbd_swapbuf = get_mat_empty(64 + 192);
         const rrbd_swapbuf = get_mat_empty(64);
@@ -835,40 +876,49 @@ async function run_nn(input_elem, output_elem){
         //rrdb_swafbuf.destroy()
         //rrdb_in = await gpuexec_readbuf(rrbd_swapbuf, Float32Array.BYTES_PER_ELEMENT * (64) * inp_img.w * inp_img.h,  (0) * inp_img.w * inp_img.h);
         eval_conv_rrdb('trunk_conv', rrbd_swapbuf, rbd_swapbuf, 64, 0, 0, [inp_img.h, inp_img.w], false);
-        rrbd_swapbuf.destroy()
+        freeGPUArray(rrbd_swapbuf);
+
         matrix_addition(rbd_swapbuf, feaBuf, 64);
-        rbd_swapbuf.destroy()
+        freeGPUArray(rbd_swapbuf);
+
 
         // console.log(fea)
         const upres1_swapbuf1 = get_mat_empty(64, inp_img.w * 2, inp_img.h * 2);
         up_resolution_dyn(feaBuf, upres1_swapbuf1,  [64, inp_img.h, inp_img.w]);
-        feaBuf.destroy();
+        freeGPUArray(feaBuf);
+
 
         const upres1_swapbuf2 = get_mat_empty(64, inp_img.w * 2, inp_img.h * 2);
 
         eval_conv_rrdb('upconv1', upres1_swapbuf1, upres1_swapbuf2, 64, 0, 0, [2 * inp_img.h, 2 * inp_img.w], true);
-        upres1_swapbuf1.destroy();
+        freeGPUArray(upres1_swapbuf1);
+
 
         const upres2_swapbuf1 = get_mat_empty(64, inp_img.w * 4, inp_img.h * 4);
         up_resolution_dyn(upres1_swapbuf2, upres2_swapbuf1,  [64, 2 * inp_img.h, 2 * inp_img.w]);
-        upres1_swapbuf2.destroy();
+        freeGPUArray(upres1_swapbuf2);
+
 
         const upres2_swapbuf2 = get_mat_empty(64, inp_img.w * 4, inp_img.h * 4);
         eval_conv_rrdb('upconv2', upres2_swapbuf1, upres2_swapbuf2, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true);
         eval_conv_rrdb('HRconv', upres2_swapbuf2, upres2_swapbuf1, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true);
-        upres2_swapbuf2.destroy();
+        freeGPUArray(upres2_swapbuf2);
+
 
         const outImgBuf = get_mat_empty(3, 4 * inp_img.w, 4 * inp_img.h);
         eval_conv_rrdb('conv_last', upres2_swapbuf1, outImgBuf, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], false);
-        upres2_swapbuf1.destroy();
-        console.log('sub?')
+        freeGPUArray(upres2_swapbuf1);
+
+        console.log('all submitted');
         let outImg = await gpuexec_readbuf(outImgBuf, Float32Array.BYTES_PER_ELEMENT * (3) * inp_img.w * 4 * inp_img.h * 4,  (0) * inp_img.w * inp_img.h);
-        console.log('done')
-        outImgBuf.destroy();
+        console.log('done');
+        //console.log(outImg);
+        freeGPUArray(outImgBuf);
+
 
         // delete weights and biases from gpu
-        layerdatabufs.wbuf.destroy();
-        layerdatabufs.bbuf.destroy();
+        freeGPUArray(layerdatabufs.wbuf);
+        freeGPUArray(layerdatabufs.bbuf);
 
         return outImg;
 

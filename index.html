@@ -76,8 +76,15 @@
 
         <hr style="clear: both">
         <div class="col-md-12">
-            <progress id="download_progress" value=""></progress>
-            <pre id="dataload_status">Init...</pre>
+            <div class="col-md-3">
+                <span>Mem usage:</span><span id="memusage">N/A</span>
+            </div>
+            <div class="col-md-9">
+                <progress id="download_progress" value=""></progress>
+            </div>
+            <div class="col-md-12">
+                <pre id="dataload_status">Init...</pre>
+            </div>
         </div>
         <hr style="clear: both">
         <div class="col-md-12" id="networksList">

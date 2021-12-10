@@ -12,7 +12,7 @@
 
 </head>
 <body>
-<img src="baboon_sm.png" id="sm_img" crossorigin="anonymous">
+<img src="baboon.png" id="sm_img" crossorigin="anonymous">
 yay
 <canvas id="original"></canvas>
 <canvas id="result"></canvas>
@@ -27,8 +27,10 @@ yay
     async function main(){
         await storeModelData("RRDB_ESRGAN_x4", "ESRGAN_py/RRDB_ESRGAN_x4");
         const img = document.getElementById('sm_img');
-        const output_elem = document.getElementById('result')
-        run_nn(img, output_elem);
+        const output_elem = document.getElementById('result');
+        const status_elem = document.getElementById('dataload_status');
+        const gpumem_elem = document.getElementById('dataload_status');
+        run_nn(img, output_elem, status_elem, gpumem_elem);
     }
     main();
 
