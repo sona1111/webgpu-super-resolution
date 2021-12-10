@@ -74,18 +74,7 @@
             <br style="clear: both">
         </div>
 
-        <hr style="clear: both">
-        <div class="col-md-12">
-            <div class="col-md-3">
-                <span>Mem usage:</span><span id="memusage">N/A</span>
-            </div>
-            <div class="col-md-9">
-                <progress id="download_progress" value=""></progress>
-            </div>
-            <div class="col-md-12">
-                <pre id="dataload_status">Init...</pre>
-            </div>
-        </div>
+
         <hr style="clear: both">
         <div class="col-md-12" id="networksList">
             <div class="col-sm-2">
@@ -104,6 +93,51 @@
                         <img style="width: 100%;" src="static/img/nn_psnr.png">
                         <button class="btn btn-primary btn-sm networkload" data-networkname="RRDB_PSNR_x4" disabled>LOAD</button>
                     </div>
+                </div>
+            </div>
+            <div class="col-sm-2">
+                <div class="panel panel-default networkpanel">
+                    <div class="panel-body text-center">
+                        <h6>RealESRGAN x4plus Anime</h6>
+                        <img style="width: 100%;" src="static/img/nn_anime.png">
+                        <button class="btn btn-primary btn-sm networkload" data-networkname="RealESRGAN_x4plus_anime_6B" disabled>LOAD</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-2">
+                <div class="panel panel-default networkpanel">
+                    <div class="panel-body text-center">
+                        <h6>RealESRGAN x4plus</h6>
+                        <img style="width: 100%;" src="static/img/nn_real_plus.png">
+                        <button class="btn btn-primary btn-sm networkload" data-networkname="RealESRGAN_x4plus" disabled>LOAD</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-2">
+                <div class="panel panel-default networkpanel">
+                    <div class="panel-body text-center">
+                        <h6>RealESRNet x4plus</h6>
+                        <img style="width: 100%;" src="static/img/nn_real_mse.png">
+                        <button class="btn btn-primary btn-sm networkload" data-networkname="RealESRNet_x4plus" disabled>LOAD</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr style="clear: both">
+        <div class="col-md-12">
+            <div class="col-md-12">
+                <pre id="dataload_status">Init...</pre>
+            </div>
+            <div class="col-md-12">
+                <progress id="download_progress" value=""></progress>
+            </div>
+            <div class="col-sm-3">
+                <span>Mem usage:</span><span id="memusage">N/A</span>
+            </div>
+            <div class="col-sm-3">
+                <div class="form-group">
+                    <label for="numDenseBlocks">Quality (number of dense blocks)</label>
+                    <input type="number" class="form-control" id="numDenseBlocks" min="1" max="23" step="1" value="23">
                 </div>
             </div>
         </div>
@@ -132,6 +166,7 @@
                     </div>
                     <div class="panel-body">
                         <input id="imageUpload" name="imageUpload" type="file" disabled>
+                        <button type="button" class="btn btn-default" id="mannualrerun">Re-Run</button>
                     </div>
                 </div>
             </div>
@@ -194,6 +229,13 @@
                 const networkname = $(this).data('networkname');
                 await storeModelData(networkname, `ESRGAN_py/${networkname}`);
                 current_network = networkname;
+                if(current_network === 'RealESRGAN_x4plus_anime_6B'){
+                    document.getElementById('numDenseBlocks').value = 6;
+                    document.getElementById('numDenseBlocks').max = 6;
+                }else{
+                    document.getElementById('numDenseBlocks').value = 23;
+                    document.getElementById('numDenseBlocks').max = 23;
+                }
                 $(this).closest('.networkpanel').css('background-color', '#dff0d8');
                 $('#imageUpload, #demo1, #demo2, #demo3').prop('disabled', false);
             })

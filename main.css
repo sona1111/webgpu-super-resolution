@@ -39,3 +39,7 @@
 #networkrunningloader{
     display: none;
 }
+
+.networkload{
+    margin-top:4px;
+}

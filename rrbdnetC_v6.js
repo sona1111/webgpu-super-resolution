@@ -3,7 +3,7 @@ async function read_shader(path){
     return await conv2dc.text();
 }
 
-async function run_nn(input_elem, output_elem, status_elem, gpumem_elem){
+async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_dense_blocks){
     const _modeldata = modeldata[current_network];
 
 
@@ -833,7 +833,8 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem){
         device2device(feaBuf, 0, rrbd_swapbuf, 0, (64) * inp_img.w * inp_img.h);
 
         //console.log(fea)
-        for (let rrdb_chunk = 0; rrdb_chunk < 23; rrdb_chunk++) {
+
+        for (let rrdb_chunk = 0; rrdb_chunk < num_dense_blocks; rrdb_chunk++) {
             //let rdb_in = rrdb_in;
 
             for (let rdb = 1; rdb <= 3; rdb ++) {

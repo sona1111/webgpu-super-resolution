@@ -8,6 +8,8 @@ import RRDBNet_arch as arch
 import torch.nn as nn
 import json
 import sys
+import re
+from collections import OrderedDict
 
 def export_js_modelbin(model, path, arch, is_quantized):
 
@@ -53,14 +55,57 @@ def quantize_model(model):
     model_static_quantized = torch.quantization.convert(model_static_quantized, inplace=False)
     return model_static_quantized
 
+def esrgan_plus_to_esrgan(states):
+
+    tr_keys = {
+        'conv_hr.weight': 'HRconv.weight',
+        'conv_hr.bias': 'HRconv.bias',
+        'conv_up2.weight': 'upconv2.weight',
+        'conv_up2.bias': 'upconv2.bias',
+        'conv_up1.weight': 'upconv1.weight',
+        'conv_up1.bias': 'upconv1.bias',
+        'conv_body.weight': 'trunk_conv.weight',
+        'conv_body.bias': 'trunk_conv.bias',
+    }
+    states = states['params_ema']
+    new_states = OrderedDict()
+    keys = states.keys()
+    for key in keys:
+
+        match = re.search(r'body\.(\d+)\.rdb(\d+)\.conv(\d+)\.(\w+)', key)
+        if match:
+            key_new = f'RRDB_trunk.{match.groups()[0]}.RDB{match.groups()[1]}.conv{match.groups()[2]}.{match.groups()[3]}'
+            #print(match.groups())
+        elif key in tr_keys:
+            key_new = tr_keys[key]
+        else:
+            key_new = key
+
+        new_states[key_new] = states[key]
+    return new_states
+
 if __name__ == "__main__":
     #model_weight_path = 'models/RRDB_ESRGAN_x4.pth'  # models/RRDB_ESRGAN_x4.pth OR models/RRDB_PSNR_x4.pth
-    model_weight_path = 'models/RRDB_PSNR_x4.pth'
-    model = arch.RRDBNet(3, 3, 64, 23, gc=32)
-    model.load_state_dict(torch.load(model_weight_path), strict=True)
-    model.eval()
 
-    # model_quant = quantize_model(model)
-    # print(model_quant.state_dict()['conv_first.bias'])
+    for name in ['RealESRNet_x4plus',  'RealESRGAN_x4plus', 'RealESRGAN_x4plus_anime_6B']: # ,: 'RealESRGAN_x2plus'
+        print(name)
+        model_weight_path = f'models/{name}.pth'
 
-    export_js_modelbin(model, 'RRDB_PSNR_x4', 'RRDB_PSNR_x4', False)
+        states = torch.load(model_weight_path)
+
+        if True:
+            states = esrgan_plus_to_esrgan(states)
+        #print(list(states['params_ema'].keys()))
+        #assert False
+
+        if name == 'RealESRGAN_x4plus_anime_6B':
+            model = arch.RRDBNet(3, 3, 64, 6, gc=32)
+        else:
+            model = arch.RRDBNet(3, 3, 64, 23, gc=32)
+        model.load_state_dict(states, strict=True)
+        model.eval()
+
+        # model_quant = quantize_model(model)
+        # print(model_quant.state_dict()['conv_first.bias'])
+
+        export_js_modelbin(model, name, name, False)
