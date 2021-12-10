@@ -3,7 +3,7 @@ async function read_shader(path){
     return await conv2dc.text();
 }
 
-async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_dense_blocks){
+async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progress_elem, num_dense_blocks){
     const _modeldata = modeldata[current_network];
 
 
@@ -39,6 +39,14 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
     function updategpumem(amount){
         gpu_memory_used += amount;
         gpumem_elem.textContent = `${gpu_memory_used/1000/1000} Mb`;
+    }
+
+    function getCurrentQueue(device){
+        if(device.queue.onSubmittedWorkDone !== undefined){
+            return device.queue.onSubmittedWorkDone();
+        }else{
+            return Promise.resolve();
+        }
     }
 
     function allocateGPUArray(mappedAtCreation, size, usage){
@@ -311,10 +319,13 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
         device.queue.submit([gpuCommands]);
 
         freeGPUArray(unifbuffer);
+        return getCurrentQueue(device);
 
 
 
     }
+
+
 
     function gpuexec_conv_rrdb_twobuff(inputBuff, outputBuff, inputshape, weight, weightshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModule) {
 
@@ -432,7 +443,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
         device.queue.submit([gpuCommands]);
 
         freeGPUArray(unifbuffer);
-
+        return getCurrentQueue(device);
 
 
     }
@@ -604,6 +615,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
         freeGPUArray(unifbuffer);
+        return getCurrentQueue(device);
 
     }
 
@@ -687,6 +699,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
         freeGPUArray(unifbuffer);
+        return getCurrentQueue(device);
     }
 
     function up_resolution_dyn(inputBuff, outputBuff, inputSize) {
@@ -773,6 +786,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
         device.queue.submit([gpuCommands]);
 
         freeGPUArray(unifbuffer);
+        return getCurrentQueue(device);
 
     }
 
@@ -822,9 +836,10 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
             );
         }
 
+        let tasks = [];
         const feaBuf = get_mat_empty(64);
         const inpImgBuf = copy_mat_inpimg(inp_img.c);
-        eval_conv_rrdb('conv_first', inpImgBuf, feaBuf, 3, 0, 0, [inp_img.h, inp_img.w], false);
+        tasks.push(eval_conv_rrdb('conv_first', inpImgBuf, feaBuf, 3, 0, 0, [inp_img.h, inp_img.w], false));
         freeGPUArray(inpImgBuf);
 
         const rbd_swapbuf = get_mat_empty(64 + 192);
@@ -840,34 +855,34 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
             for (let rdb = 1; rdb <= 3; rdb ++) {
 
 
-                eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv1', rbd_swapbuf, rbd_swapbuf,
+                tasks.push(eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv1', rbd_swapbuf, rbd_swapbuf,
                     64, 0, (64) * inp_img.w * inp_img.h,
-                    [inp_img.h, inp_img.w], true );
+                    [inp_img.h, inp_img.w], true ));
 
 
 
-                eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv2', rbd_swapbuf, rbd_swapbuf,
+                tasks.push(eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv2', rbd_swapbuf, rbd_swapbuf,
                     96, 0, (96) * inp_img.w * inp_img.h,
-                    [inp_img.h, inp_img.w], true);
+                    [inp_img.h, inp_img.w], true));
 
-                eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv3', rbd_swapbuf, rbd_swapbuf,
+                tasks.push(eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv3', rbd_swapbuf, rbd_swapbuf,
                     128, 0, (128) * inp_img.w * inp_img.h,
-                    [inp_img.h, inp_img.w], true);
+                    [inp_img.h, inp_img.w], true));
 
-                eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv4', rbd_swapbuf, rbd_swapbuf,
+                tasks.push(eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv4', rbd_swapbuf, rbd_swapbuf,
                     160, 0, (160) * inp_img.w * inp_img.h,
-                    [inp_img.h, inp_img.w], true);
+                    [inp_img.h, inp_img.w], true));
 
-                eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv5', rbd_swapbuf, rbd_swapbuf,
+                tasks.push(eval_conv_rrdb('RRDB_trunk.' +  rrdb_chunk + '.RDB' + rdb + '.conv5', rbd_swapbuf, rbd_swapbuf,
                     192, 0, (192) * inp_img.w * inp_img.h,
-                    [inp_img.h, inp_img.w], false);
+                    [inp_img.h, inp_img.w], false));
 
 
-                scale_residual_rrdb(rbd_swapbuf, rbd_swapbuf, (192) * inp_img.w * inp_img.h, 0, 64);
+                tasks.push(scale_residual_rrdb(rbd_swapbuf, rbd_swapbuf, (192) * inp_img.w * inp_img.h, 0, 64));
 
             }
 
-            scale_residual_rrdb(rbd_swapbuf, rrbd_swapbuf, 0,(0) * inp_img.w * inp_img.h, 64);
+            tasks.push(scale_residual_rrdb(rbd_swapbuf, rrbd_swapbuf, 0,(0) * inp_img.w * inp_img.h, 64));
             if(rrdb_chunk != 22){
                 device2device(rrbd_swapbuf, 0, rbd_swapbuf, 0, (64) * inp_img.w * inp_img.h);
             }
@@ -876,41 +891,49 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, num_den
         //rdb_swafbuf.destroy()
         //rrdb_swafbuf.destroy()
         //rrdb_in = await gpuexec_readbuf(rrbd_swapbuf, Float32Array.BYTES_PER_ELEMENT * (64) * inp_img.w * inp_img.h,  (0) * inp_img.w * inp_img.h);
-        eval_conv_rrdb('trunk_conv', rrbd_swapbuf, rbd_swapbuf, 64, 0, 0, [inp_img.h, inp_img.w], false);
+        tasks.push(eval_conv_rrdb('trunk_conv', rrbd_swapbuf, rbd_swapbuf, 64, 0, 0, [inp_img.h, inp_img.w], false));
         freeGPUArray(rrbd_swapbuf);
 
-        matrix_addition(rbd_swapbuf, feaBuf, 64);
+        tasks.push(matrix_addition(rbd_swapbuf, feaBuf, 64));
         freeGPUArray(rbd_swapbuf);
 
 
         // console.log(fea)
         const upres1_swapbuf1 = get_mat_empty(64, inp_img.w * 2, inp_img.h * 2);
-        up_resolution_dyn(feaBuf, upres1_swapbuf1,  [64, inp_img.h, inp_img.w]);
+        tasks.push(up_resolution_dyn(feaBuf, upres1_swapbuf1,  [64, inp_img.h, inp_img.w]));
         freeGPUArray(feaBuf);
 
 
         const upres1_swapbuf2 = get_mat_empty(64, inp_img.w * 2, inp_img.h * 2);
 
-        eval_conv_rrdb('upconv1', upres1_swapbuf1, upres1_swapbuf2, 64, 0, 0, [2 * inp_img.h, 2 * inp_img.w], true);
+        tasks.push(eval_conv_rrdb('upconv1', upres1_swapbuf1, upres1_swapbuf2, 64, 0, 0, [2 * inp_img.h, 2 * inp_img.w], true));
         freeGPUArray(upres1_swapbuf1);
 
 
         const upres2_swapbuf1 = get_mat_empty(64, inp_img.w * 4, inp_img.h * 4);
-        up_resolution_dyn(upres1_swapbuf2, upres2_swapbuf1,  [64, 2 * inp_img.h, 2 * inp_img.w]);
+        tasks.push(up_resolution_dyn(upres1_swapbuf2, upres2_swapbuf1,  [64, 2 * inp_img.h, 2 * inp_img.w]));
         freeGPUArray(upres1_swapbuf2);
 
 
         const upres2_swapbuf2 = get_mat_empty(64, inp_img.w * 4, inp_img.h * 4);
-        eval_conv_rrdb('upconv2', upres2_swapbuf1, upres2_swapbuf2, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true);
-        eval_conv_rrdb('HRconv', upres2_swapbuf2, upres2_swapbuf1, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true);
+        tasks.push(eval_conv_rrdb('upconv2', upres2_swapbuf1, upres2_swapbuf2, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true));
+        tasks.push(eval_conv_rrdb('HRconv', upres2_swapbuf2, upres2_swapbuf1, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], true));
         freeGPUArray(upres2_swapbuf2);
 
 
         const outImgBuf = get_mat_empty(3, 4 * inp_img.w, 4 * inp_img.h);
-        eval_conv_rrdb('conv_last', upres2_swapbuf1, outImgBuf, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], false);
+        tasks.push(eval_conv_rrdb('conv_last', upres2_swapbuf1, outImgBuf, 64, 0, 0, [4 * inp_img.h, 4 * inp_img.w], false));
         freeGPUArray(upres2_swapbuf1);
 
         console.log('all submitted');
+        progress_elem.value = 0;
+        progress_elem.max = tasks.length;
+        for(let i=0; i<tasks.length; i++){
+            //console.log(i);
+            await tasks[i];
+            progress_elem.value += 1;
+        }
+        console.log('after promise')
         let outImg = await gpuexec_readbuf(outImgBuf, Float32Array.BYTES_PER_ELEMENT * (3) * inp_img.w * 4 * inp_img.h * 4,  (0) * inp_img.w * inp_img.h);
         console.log('done');
         //console.log(outImg);

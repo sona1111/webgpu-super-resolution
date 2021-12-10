@@ -12,7 +12,7 @@
 
 </head>
 <body>
-<img src="baboon.png" id="sm_img" crossorigin="anonymous">
+<img src="baboon_sm.png" id="sm_img" crossorigin="anonymous">
 yay
 <canvas id="original"></canvas>
 <canvas id="result"></canvas>
@@ -30,7 +30,8 @@ yay
         const output_elem = document.getElementById('result');
         const status_elem = document.getElementById('dataload_status');
         const gpumem_elem = document.getElementById('dataload_status');
-        run_nn(img, output_elem, status_elem, gpumem_elem);
+        const progress_elem = document.getElementById('download_progress');
+        run_nn(img, output_elem, status_elem, gpumem_elem, progress_elem, 23);
     }
     main();
 
