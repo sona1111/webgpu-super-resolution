@@ -13,6 +13,7 @@ function initmain(){
     document.getElementById('imageUpload').addEventListener('change', async function() {
         if (this.files && this.files[0]) {
             var img = document.querySelector('img');
+            img.style.display = 'none';
             img.onload = async function (){
                 URL.revokeObjectURL(img.src);  // no longer needed, free memory
 
