@@ -46,12 +46,18 @@ function getLDBAsync(key) {
 }
 
 async function storeModelData(store_key, url){
-    if(store_key in modeldata){
-        return;
+    // if(store_key in modeldata){
+    //     return;
+    // }
+    if(device_model_pointers !== null){
+        device_model_pointers.wbuf.destroy();
+        device_model_pointers.bbuf.destroy();
     }
+
     document.getElementById('imageUpload').disabled = true;
     document.getElementById('dataload_status').textContent = `Downloading ${store_key}...`;
     let meta = await makeRequest("GET", `${url}/modelinfo.json`, 'json');
+    device_model_meta = meta.layers;
     const arrayclass = meta.is_quantized === true ? Int8Array : Float32Array;
     const progress = document.getElementById('download_progress');
     progress.value = 0;
@@ -61,17 +67,58 @@ async function storeModelData(store_key, url){
     let progress_done = 0;
     progress.max = num_layers;
 
+    // calculate buffer sizes needed
+
+    const offsetsw = {};
+    const sizesw = {};
+    let offsetw = 0;
+    const offsetsb = {};
+    const sizesb = {};
+    let offsetb = 0;
+
+    for(let layer of meta.layers){
+        offsetsw[layer.name] = offsetw;
+        sizesw[layer.name] = layer.wshape.reduce((a, b)=> a*b, 1);
+        offsetw += layer.wshape.reduce((a, b)=> a*b, 1);
+        offsetsb[layer.name] = offsetb;
+        sizesb[layer.name] = layer.bshape.reduce((a, b)=> a*b, 1);
+        offsetb += layer.bshape.reduce((a, b)=> a*b, 1);
+        device_model_meta[layer.name] = {
+            wshape: layer.wshape,
+            bshape: layer.bshape
+        }
+    }
+
+    const device = await getDevice();
+    const gpuArrayWeight = device.createBuffer({
+        mappedAtCreation: true,
+        size: Float32Array.BYTES_PER_ELEMENT * offsetw,
+        usage: GPUBufferUsage.STORAGE
+    });
+
+    const gpuArrayBias = device.createBuffer({
+        mappedAtCreation: true,
+        size: Float32Array.BYTES_PER_ELEMENT * offsetb,
+        usage: GPUBufferUsage.STORAGE
+    });
+
     for(let layer of meta.layers){
 
         const alreadyExist = await getLDBAsync(`${url}/${layer.name}`);
+        let cpuWeight = null;
+        let cpuBias = null;
         if(alreadyExist){
             //console.log(`using cached ${url}/${layer.name}`)
-            result[layer.name] = JSON.parse(alreadyExist);
-            result[layer.name].w = await getLDBAsync(`${url}/${layer.name}/w`);
-            result[layer.name].b = await getLDBAsync(`${url}/${layer.name}/b`);
+            //result[layer.name] = JSON.parse(alreadyExist);
+            // result[layer.name].w = await getLDBAsync(`${url}/${layer.name}/w`);
+            // result[layer.name].b = await getLDBAsync(`${url}/${layer.name}/b`);
+            cpuWeight = await getLDBAsync(`${url}/${layer.name}/w`);
+            cpuBias = await getLDBAsync(`${url}/${layer.name}/b`);
         }else{
             const layerWeights = await downloadLayerWeights(url, layer, arrayclass);
-            result[layer.name] = layerWeights;
+            //result[layer.name] = layerWeights;
+            cpuWeight = layerWeights.w;
+            cpuBias = layerWeights.b;
             try{
                 ldb.set(`${url}/${layer.name}`, JSON.stringify({
                     'wshape': layerWeights.wshape,
@@ -84,13 +131,34 @@ async function storeModelData(store_key, url){
                 console.log(`UNABLE to store ${url} to localstorage`);
             }
         }
+
+        // upload to gpu
+        const gpuArrayRNGW = gpuArrayWeight.getMappedRange(Float32Array.BYTES_PER_ELEMENT * offsetsw[layer.name],
+            Float32Array.BYTES_PER_ELEMENT * sizesw[layer.name]);
+        new Float32Array(gpuArrayRNGW).set(cpuWeight);
+        const gpuArrayRNGB = gpuArrayBias.getMappedRange(Float32Array.BYTES_PER_ELEMENT * offsetsb[layer.name],
+            Float32Array.BYTES_PER_ELEMENT * sizesb[layer.name]);
+        new Float32Array(gpuArrayRNGB).set(cpuBias);
+
+
         progress_done += 1;
         progress.value = progress_done;
     }
 
-    modeldata[store_key] = result;
+    gpuArrayWeight.unmap();
+    gpuArrayBias.unmap();
+
+    //modeldata[store_key] = result;
     document.getElementById('dataload_status').textContent = `Ready!`;
     document.getElementById('imageUpload').disabled = false;
+
+    device_model_pointers = {
+        offsetsw: offsetsw,
+        offsetsb: offsetsb,
+        wbuf: gpuArrayWeight,
+        bbuf: gpuArrayBias
+    }
+
 }
 
 function quantizeToInt8(float32){

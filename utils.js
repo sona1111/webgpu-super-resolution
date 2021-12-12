@@ -148,3 +148,23 @@ async function populateWebGpuInfo(){
 
 
 }
+
+
+async function getDevice(){
+    if(current_device === null){
+        //const adapter = await navigator.gpu.requestAdapter();
+        //Chooses the high performance GPU instead of the integrated GPU
+        const adapter = await navigator.gpu.requestAdapter({powerPreference: "high-performance"});
+        if (!adapter) {
+            console.log("Failed to get GPU adapter.");
+            return;
+        }
+        const __device = await adapter.requestDevice({
+            'requiredLimits':{
+                'maxStorageBufferBindingSize': adapter.limits.maxStorageBufferBindingSize
+            }
+        });
+        current_device = __device;
+    }
+    return current_device;
+}

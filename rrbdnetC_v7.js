@@ -3,8 +3,9 @@ async function read_shader(path){
     return await conv2dc.text();
 }
 
+
+
 async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progress_elem, num_dense_blocks){
-    const _modeldata = modeldata[current_network];
 
 
     document.getElementById('imageUpload').disabled = true;
@@ -13,18 +14,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
       return;
     }
   
-    //const adapter = await navigator.gpu.requestAdapter();
-    //Chooses the high performance GPU instead of the integrated GPU
-    const adapter = await navigator.gpu.requestAdapter({powerPreference: "high-performance"});
-    if (!adapter) {
-      console.log("Failed to get GPU adapter.");
-      return;
-    }
-    const device = await adapter.requestDevice({
-        'requiredLimits':{
-            'maxStorageBufferBindingSize': adapter.limits.maxStorageBufferBindingSize
-        }
-    });
+    const device = await getDevice();
 
     let gpu_memory_used = 0;
     const inp_img = getImgDataFromImgElem(input_elem);
@@ -37,7 +27,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
     }
 
     function updategpumem(amount){
-        return;
+
         gpu_memory_used += amount;
         gpumem_elem.textContent = `${gpu_memory_used/1024/1024} Mb`;
     }
@@ -791,7 +781,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
     async function esrgan(){
 
         // var startTime_load = performance.now()
-        const layerdatabufs = await preloadWeightsAndBias(_modeldata);
+        // const layerdatabufs = await preloadWeightsAndBias(_modeldata);
         // var endTime_load = performance.now()
     
         // console.log(`Model Transfer took ${endTime_load - startTime_load} milliseconds`)
@@ -802,12 +792,12 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
             return conv_fwd_rrdb(
                 inputBuff, outputBuff,
                 in_ch_count, inp_shape,
-                layerdatabufs.wbuf,
-                _modeldata[name].wshape,
-                layerdatabufs.offsetsw[name],
-                layerdatabufs.bbuf,
-                _modeldata[name].bshape,
-                layerdatabufs.offsetsb[name],
+                device_model_pointers.wbuf,
+                device_model_meta[name].wshape,
+                device_model_pointers.offsetsw[name],
+                device_model_pointers.bbuf,
+                device_model_meta[name].bshape,
+                device_model_pointers.offsetsb[name],
                 inputOffset, outputOffset,
                 relu
             );
@@ -919,8 +909,8 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
 
 
         // delete weights and biases from gpu
-        freeGPUArray(layerdatabufs.wbuf);
-        freeGPUArray(layerdatabufs.bbuf);
+        // freeGPUArray(layerdatabufs.wbuf);
+        // freeGPUArray(layerdatabufs.bbuf);
 
         return outImg;
 
