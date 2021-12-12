@@ -20,6 +20,12 @@ WebGPU Image Super Resolution
 
 We created a WebGPU based image super resolution program. Under the hood, it runs a neural netork based on [ESRGAN](https://github.com/xinntao/ESRGAN). The input to the program is any RGB image. The output of the program is the same image with 4x resolution. The program runs in Chrome Canary with the flag `--enable-unsafe-webgpu`. We currently support up-sizing images of size 200px by 200px and size limits may vary depending on different hardwares.
 
+## Performance Analysis
+
+![](benchmark/runtime.png)
+![](benchmark/ramuse.png)
+![](benchmark/numpx.png)
+
 ## Credits
 
 * [WebGPU Compute](https://web.dev/gpu-compute/) 
