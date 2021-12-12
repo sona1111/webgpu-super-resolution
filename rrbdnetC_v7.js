@@ -37,6 +37,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
     }
 
     function updategpumem(amount){
+        return;
         gpu_memory_used += amount;
         gpumem_elem.textContent = `${gpu_memory_used/1024/1024} Mb`;
     }
@@ -59,7 +60,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
 
         gpuArray._size = size;
         updategpumem(size);
-        status(`Allocated GPU array with size ${size/1024/1024} Mb`);
+        //status(`Allocated GPU array with size ${size/1024/1024} Mb`);
         return gpuArray;
     }
 
@@ -77,16 +78,16 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         code: await read_shader( 'shaders_f32/addition.wgsl')
     });
     const shaderModuleConvRrdb = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_unrolled.wgsl')
     });
     const shaderModuleConvRrdbTwoBuff = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff_unrolled.wgsl')
     });
     const shaderModuleConvRrdbLReLU = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_lrelu.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_lrelu_unrolled_v2.wgsl')
     });
     const shaderModuleConvRrdbTwoBuffLReLU = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff_lrelu.wgsl')
+        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff_lrelu_unrolled.wgsl')
     });
     const shaderModuleReLURrdb = device.createShaderModule({
         code: await read_shader( 'shaders_f32/leakyrelu_rrdb.wgsl')
@@ -789,8 +790,11 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
 
     async function esrgan(){
 
-
+        // var startTime_load = performance.now()
         const layerdatabufs = await preloadWeightsAndBias(_modeldata);
+        // var endTime_load = performance.now()
+    
+        // console.log(`Model Transfer took ${endTime_load - startTime_load} milliseconds`)
 
         function eval_conv_rrdb(name, inputBuff, outputBuff, in_ch_count, inputOffset, outputOffset, inp_shape, relu){
             //console.log(_modeldata[name])
@@ -821,7 +825,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         device2device(feaBuf, 0, rrbd_swapbuf, 0, (64) * inp_img.w * inp_img.h);
 
         //console.log(fea)
-
+        
         for (let rrdb_chunk = 0; rrdb_chunk < num_dense_blocks; rrdb_chunk++) {
             //let rdb_in = rrdb_in;
 
@@ -861,6 +865,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
             }
 
         }
+
         //rdb_swafbuf.destroy()
         //rrdb_swafbuf.destroy()
         //rrdb_in = await gpuexec_readbuf(rrbd_swapbuf, Float32Array.BYTES_PER_ELEMENT * (64) * inp_img.w * inp_img.h,  (0) * inp_img.w * inp_img.h);
@@ -901,11 +906,11 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         console.log('all submitted');
         progress_elem.value = 0;
         progress_elem.max = tasks.length;
-        for(let i=0; i<tasks.length; i++){
-            //console.log(i);
-            await tasks[i];
-            progress_elem.value += 1;
-        }
+        // for(let i=0; i<tasks.length; i++){
+        //     //console.log(i);
+        //     await tasks[i];
+        //     progress_elem.value += 1;
+        // }
         console.log('after promise')
         let outImg = await gpuexec_readbuf(outImgBuf, Float32Array.BYTES_PER_ELEMENT * (3) * inp_img.w * 4 * inp_img.h * 4,  (0) * inp_img.w * inp_img.h);
         console.log('done');
