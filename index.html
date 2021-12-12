@@ -168,7 +168,7 @@
                     </div>
                     <div class="panel-body">
                         <input id="imageUpload" name="imageUpload" type="file" disabled>
-                        <button type="button" class="btn btn-default" id="mannualrerun">Re-Run</button>
+                        <button type="button" class="btn btn-default" id="mannualrerun" disabled>Re-Run</button>
                     </div>
                 </div>
             </div>
@@ -184,6 +184,8 @@
                     <div class="panel-body" id="resultpanel">
                         <canvas id="original"></canvas>
 <!--                        <div id="networkrunningloader" class="lds-dual-ring"></div>-->
+                        <p id="resultInfo" style="display: none;">
+                            <span style="float: left;"><span>Upscaled ⌄</span><button type="button" id="downloadResultBtn" class="btn btn-success">⟱ Download Result ⟱</button></span><span id="dlborder"></span></p>
                         <canvas id="result"></canvas>
                     </div>
                 </div>
@@ -239,7 +241,7 @@
                     document.getElementById('numDenseBlocks').max = 23;
                 }
                 $(this).closest('.networkpanel').css('background-color', '#dff0d8');
-                $('#imageUpload, #demo1, #demo2, #demo3').prop('disabled', false);
+                $('#imageUpload, #demo1, #demo2, #demo3, #mannualrerun').prop('disabled', false);
             })
         }
         main();

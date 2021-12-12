@@ -168,3 +168,12 @@ async function getDevice(){
     }
     return current_device;
 }
+
+function downloadCanvas(canvas, name){
+    const image = canvas.toDataURL("image/png", 1.0).replace("image/png", "image/octet-stream");
+    var link = document.createElement('a');
+    link.style.display = 'none';
+    link.download = `${name}.png`;
+    link.href = image;
+    link.click();
+}

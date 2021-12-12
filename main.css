@@ -43,3 +43,22 @@
 .networkload{
     margin-top:4px;
 }
+
+#resultpanel{
+    text-align: center;
+}
+
+#original, #result{
+    max-width:100%;
+}
+
+#dlborder{
+    width: 100%;
+    border-top: purple outset 4px;
+    border-right: purple outset 4px;
+    display: inline-block;
+    height: 23px;
+    margin-top: 2px;
+}
+
+
