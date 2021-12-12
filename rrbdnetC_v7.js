@@ -17,6 +17,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
     const device = await getDevice();
 
     let gpu_memory_used = 0;
+    let max_gpu_memory_used = 0;
     const inp_img = getImgDataFromImgElem(input_elem);
     const original_elem = document.getElementById('original');
     imagedata2Canvas(inp_img.c, original_elem, inp_img.w, inp_img.h);
@@ -29,7 +30,9 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
     function updategpumem(amount){
 
         gpu_memory_used += amount;
-        gpumem_elem.textContent = `${gpu_memory_used/1024/1024} Mb`;
+        max_gpu_memory_used = Math.max(gpu_memory_used, max_gpu_memory_used);
+        gpumem_elem.textContent = `${(gpu_memory_used/1024/1024).toFixed(3)} Mb ; ${(max_gpu_memory_used/1024/1024).toFixed(3)} Mb Peak`;
+
     }
 
     function getCurrentQueue(device){
