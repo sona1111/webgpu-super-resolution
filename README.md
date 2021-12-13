@@ -27,19 +27,27 @@ We created a WebGPU based image super resolution program. Under the hood, it run
 4. Voilà, now you can increase the resolution of any image that you upload!
 
 ## Super Resolution GAN Demo
-Original (320 x 214) |  ESRGAN_REAL (1280 x 856)
+Original (320 x 214) |  [ESRGAN_REAL](https://github.com/xinntao/Real-ESRGAN) (1280 x 856)
 :-------------------------:|:-------------------------:
 ![1iter](img/netherlands.jpg)  |  ![1iterDenoise](img/netherlands_RealESRGAN_x4plus.png)
 
-## Performance Analysis
+Original (448 x 299) |  [ESRGAN_ANIME](https://github.com/xinntao/Real-ESRGAN) (1792 x 1196)
+:-------------------------:|:-------------------------:
+![1iter](img/fox.png)  |  ![1iterDenoise](img/fox_anime.png)
 
+## Performance Analysis
+The graph below shows the runtime of our super resolution program with respect to the input image size. The runtime grows quadratically since the number of pixels in an image grows quadratically with respect to side length. The time complexity of our super resolution program is roughly O(number of pixels).
 ![](benchmark/runtime.png)
+The graph below shows the GPU memory usage of our super resolution program with respect to the input image size. The memory usage also grows quadratically, so the space complexity of our program is also O(number of pixels).
 ![](benchmark/ramuse.png)
-![](benchmark/numpx.png)
+
+## Implementation Details
+Since WebGPU is a new API in developement, there are limited libraries to support our need to create a neural network inference engine. We found libraries such as [WebGPU_BLAS](https://github.com/milhidaka/webgpu-blas). However, it does not support efficient matrix multiplication for random matrix sizes. So we decided to implement everything from scratch. We implemented convolution layers, leaky relu layers, residual layers, etc. Since we are implementing specifically for ESRGAN, we taylored our implementation to the specific parameters of ESRGAN. For example, all the convolution layers in ESRGAN operate on a channel x 3 x 3 patch. 
 
 ## Roadmap
 - Support for larger images
 - Further improve runtime
+- Include more variants of ESRGAN finetuned on different tasks.
 
 ## Credits
 
