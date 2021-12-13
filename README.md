@@ -26,6 +26,11 @@ We created a WebGPU based image super resolution program. Under the hood, it run
 3. Visit https://sona1111.github.io/webgpu-super-resolution/
 4. Voilà, now you can increase the resolution of any image that you upload!
 
+## Super Resolution GAN Demo
+Original (320 x 214) |  ESRGAN_REAL (1280 x 856)
+:-------------------------:|:-------------------------:
+![1iter](img/netherlands.jpg)  |  ![1iterDenoise](img/netherlands_RealESRGAN_x4plus.png)
+
 ## Performance Analysis
 
 ![](benchmark/runtime.png)

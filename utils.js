@@ -108,6 +108,7 @@ async function populateWebGpuInfo(){
     let outstr = 'navigator.gpu: ';
     if (!navigator.gpu) {
         outstr += '✖\n';
+        outstr += 'WebGPU not supported. Please follow the instructions at https://github.com/sona1111/webgpu-super-resolution\n';
         elem.textContent = outstr;
         return false;
     }else{
