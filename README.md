@@ -18,7 +18,7 @@ WebGPU Image Super Resolution
 
 ## Introduction
 
-We created a WebGPU based image super resolution program. Under the hood, it runs a neural netork based on [ESRGAN](https://github.com/xinntao/ESRGAN). The input to the program is any RGB image. The output of the program is the same image with 4x the resolution. The program runs in Chrome Canary with the flag `--enable-unsafe-webgpu`. All the computation is done on the client side, so the images uploaded by clients will remain on the client side. No privacy concerns! We currently support up-sizing images of medium size. For example, a typical GPU with 4GB RAM can upsize image of size 400px by 400px. The size limit and run time varies depending on different client hardwares.
+We created a WebGPU based image super resolution program. Under the hood, it runs a neural netork based on [ESRGAN](https://github.com/xinntao/ESRGAN). The input to the program is any RGB image that users provide. The output of the program is the same image with 4x the resolution. The program runs in Chrome Canary with the flag `--enable-unsafe-webgpu`. All the computation is done on the client side, so the images uploaded by clients will remain on the client side. No privacy concerns! We currently support up-sizing images of medium size. For example, a typical GPU with 4GB RAM can upsize image of size 400px by 400px. The size limit and run time varies depending on different client hardwares.
 
 ## Usage Instruction
 1. Download and install Chrome Canary/Chrome Dev/Firefox Nightly
@@ -49,9 +49,10 @@ Since WebGPU is a new API in developement, there are limited libraries to suppor
 - residual with scaling layer
 - 2 x up-sampling layer
 - addition layer
+
 Since we are implementing specifically for ESRGAN, we taylored our implementation to the specific parameters of ESRGAN. For example, all the convolution layers in ESRGAN operate on an input_channel x 3 x 3 patch. Instead of doing a triple for loop over the patch, we did a single for loop over input channel size and manually unrolled the double for loop into 9 segments. Another reason manual loop unrolling is required is that WGSL does not support loop unrolling. 
 
-## Roadmap
+## Future Improvements
 - Support for larger images
 - Further improve runtime
 - Include more variants of ESRGAN finetuned on different tasks
