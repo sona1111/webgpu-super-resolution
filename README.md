@@ -22,7 +22,9 @@ We created a WebGPU based image super resolution program. Under the hood, it run
 
 ## Usage Instruction
 1. Download and install Chrome Canary/Chrome Dev/Firefox Nightly
-2. Go to chrome://flags/#enable-unsafe-webgpu to enable WebGPU
+2. Enable webGPU
+   - In chrome Canary/Dev, put chrome://flags/#enable-unsafe-webgpu in the navbar and enable WebGPU
+   - In Firefox nightly, put about:preferences#experimental in the navbar, check the box for "Web API: WebGPU"
 3. Visit https://sona1111.github.io/webgpu-super-resolution/
 4. Voilà, now you can increase the resolution of any image that you upload!
 
