@@ -42,12 +42,19 @@ The graph below shows the GPU memory usage of our super resolution program with 
 ![](benchmark/ramuse.png)
 
 ## Implementation Details
-Since WebGPU is a new API in developement, there are limited libraries to support our need to create a neural network inference engine. We found libraries such as [WebGPU_BLAS](https://github.com/milhidaka/webgpu-blas). However, it does not support efficient matrix multiplication for random matrix sizes. So we decided to implement everything from scratch. We implemented convolution layers, leaky relu layers, residual layers, etc. Since we are implementing specifically for ESRGAN, we taylored our implementation to the specific parameters of ESRGAN. For example, all the convolution layers in ESRGAN operate on a channel x 3 x 3 patch. 
+Since WebGPU is a new API in developement, there are limited libraries to support our need to create a neural network inference engine. We found libraries such as [WebGPU_BLAS](https://github.com/milhidaka/webgpu-blas). However, it does not support efficient matrix multiplication for random matrix sizes. So we decided to implement everything from scratch. We implemented 
+- convolution layer
+- leaky relu layer
+- convolution layer fused with leaky relu
+- residual with scaling layer
+- 2 x up-sampling layer
+- addition layer
+Since we are implementing specifically for ESRGAN, we taylored our implementation to the specific parameters of ESRGAN. For example, all the convolution layers in ESRGAN operate on an input_channel x 3 x 3 patch. Instead of doing a triple for loop over the patch, we did a single for loop over input channel size and manually unrolled the double for loop into 9 segments. Another reason manual loop unrolling is required is that WGSL does not support loop unrolling. 
 
 ## Roadmap
 - Support for larger images
 - Further improve runtime
-- Include more variants of ESRGAN finetuned on different tasks.
+- Include more variants of ESRGAN finetuned on different tasks
 
 ## Credits
 
