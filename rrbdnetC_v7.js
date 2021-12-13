@@ -1,7 +1,4 @@
-async function read_shader(path){
-    const conv2dc = await fetch(path);
-    return await conv2dc.text();
-}
+
 
 
 
@@ -61,37 +58,6 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         array.destroy();
         updategpumem(-array._size);
     }
-
-
-
-    const shaderModuleInterpolate = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/interpolate.wgsl')
-    });
-    const shaderModuleAddition = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/addition.wgsl')
-    });
-    const shaderModuleConvRrdb = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_unrolled.wgsl')
-    });
-    const shaderModuleConvRrdbTwoBuff = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff_unrolled.wgsl')
-    });
-    const shaderModuleConvRrdbLReLU = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_lrelu_unrolled_v2.wgsl')
-    });
-    const shaderModuleConvRrdbTwoBuffLReLU = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/conv2d_allch_rrdb_twobuff_lrelu_unrolled.wgsl')
-    });
-    const shaderModuleReLURrdb = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/leakyrelu_rrdb.wgsl')
-    });
-    const shaderModuleScaleResRrdb = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/scaleandresidual_rrdb.wgsl')
-    });
-    const shaderModuleScaleResRrdbInplace = device.createShaderModule({
-        code: await read_shader( 'shaders_f32/scaleandresidual_rrdb_inplace.wgsl')
-    });
-
 
     function copy_mat_gpu(floatArr, arrclass, usage){
         // get GPU pointer for CPU float32 array and copy data to it
@@ -476,7 +442,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         let module;
         let bindGroupLayout;
         if(inputBuff === outputBuff){
-            module = shaderModuleScaleResRrdbInplace;
+            module = shader_modules.shaderModuleScaleResRrdbInplace;
             bindGroupLayout = device.createBindGroupLayout({
                 entries: [
                     {
@@ -510,7 +476,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
                 }
             ]
         }else{
-            module = shaderModuleScaleResRrdb;
+            module = shader_modules.shaderModuleScaleResRrdb;
             bindGroupLayout = device.createBindGroupLayout({
                 entries: [
                     {
@@ -623,7 +589,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
                 bindGroupLayouts: [bindGroupLayout]
             }),
             compute: {
-              module: shaderModuleAddition,
+              module: shader_modules.shaderModuleAddition,
               entryPoint: "main"
             }
           });        
@@ -709,7 +675,7 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
                 bindGroupLayouts: [bindGroupLayout]
             }),
             compute: {
-                module: shaderModuleInterpolate,
+                module: shader_modules.shaderModuleInterpolate,
                 entryPoint: "main"
             }
         });
@@ -765,18 +731,18 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         if(inputBuff === outputBuff){
             if (relu) {
                 gpuexec_conv_rrdb(outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
-                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdbLReLU);
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shader_modules.shaderModuleConvRrdbLReLU);
             } else {
                 gpuexec_conv_rrdb(outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
-                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdb);
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shader_modules.shaderModuleConvRrdb);
             }            
         }else{
             if (relu) {
                 gpuexec_conv_rrdb_twobuff(inputBuff, outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
-                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdbTwoBuffLReLU);
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shader_modules.shaderModuleConvRrdbTwoBuffLReLU);
             } else {
                 gpuexec_conv_rrdb_twobuff(inputBuff, outputBuff, [in_ch_count, inp_shape[1], inp_shape[0]],
-                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shaderModuleConvRrdbTwoBuff);
+                    weight, wshape, bias, offsetw, offsetb, inputOffset, outputOffset, shader_modules.shaderModuleConvRrdbTwoBuff);
             }
         }
     }

@@ -45,6 +45,16 @@ function getLDBAsync(key) {
     });
 }
 
+async function read_shader_and_create(path){
+    const conv2dc = await fetch(path);
+    const code = await conv2dc.text();
+    const shadermodule = current_device.createShaderModule({
+        code: code
+    });
+    return shadermodule;
+}
+
+
 async function storeModelData(store_key, url){
     // if(store_key in modeldata){
     //     return;
@@ -158,6 +168,28 @@ async function storeModelData(store_key, url){
         wbuf: gpuArrayWeight,
         bbuf: gpuArrayBias
     }
+
+    if(shader_modules === null){
+        shader_modules = {
+            shaderModuleInterpolate: 'shaders_f32/interpolate.wgsl',
+            shaderModuleAddition:  'shaders_f32/addition.wgsl',
+            shaderModuleConvRrdb: 'shaders_f32/conv2d_allch_rrdb_unrolled.wgsl',
+            shaderModuleConvRrdbTwoBuff: 'shaders_f32/conv2d_allch_rrdb_twobuff_unrolled.wgsl',
+            shaderModuleConvRrdbLReLU: 'shaders_f32/conv2d_allch_rrdb_lrelu_unrolled_v2.wgsl',
+            shaderModuleConvRrdbTwoBuffLReLU: 'shaders_f32/conv2d_allch_rrdb_twobuff_lrelu_unrolled.wgsl',
+            shaderModuleReLURrdb: 'shaders_f32/leakyrelu_rrdb.wgsl',
+            shaderModuleScaleResRrdb: 'shaders_f32/scaleandresidual_rrdb.wgsl',
+            shaderModuleScaleResRrdbInplace: 'shaders_f32/scaleandresidual_rrdb_inplace.wgsl'
+        }
+        for(let modulename in shader_modules){
+            shader_modules[modulename] = read_shader_and_create(shader_modules[modulename]);
+        }
+        for(let modulename in shader_modules){
+            shader_modules[modulename] = await shader_modules[modulename];
+        }
+    }
+
+
 
 }
 

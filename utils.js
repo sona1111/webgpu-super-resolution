@@ -1,3 +1,6 @@
+
+
+
 function _getImgDataFromImgElem(imgElem){
     const canvas = document.createElement('canvas');
     canvas.width = imgElem.width;
