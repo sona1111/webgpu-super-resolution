@@ -247,11 +247,11 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(inputshape[1] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(inputshape[2] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const x = Math.ceil(inputshape[1] / 4); // X dimension of the grid of workgroups to dispatchWorkgroups.
+        const y = Math.ceil(inputshape[2] / 4); // Y dimension of the grid of workgroups to dispatchWorkgroups.
         const z = Math.ceil(weightshape[0] / 4); 
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
+        passEncoder.dispatchWorkgroups(x, y, z);
+        passEncoder.end();
 
         // Submit GPU commands.
         const gpuCommands = commandEncoder.finish();
@@ -369,11 +369,11 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(inputshape[1] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(inputshape[2] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const x = Math.ceil(inputshape[1] / 4); // X dimension of the grid of workgroups to dispatchWorkgroups.
+        const y = Math.ceil(inputshape[2] / 4); // Y dimension of the grid of workgroups to dispatchWorkgroups.
         const z = Math.ceil(weightshape[0] / 4); 
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
+        passEncoder.dispatchWorkgroups(x, y, z);
+        passEncoder.end();
 
         // Submit GPU commands.
         const gpuCommands = commandEncoder.finish();
@@ -543,11 +543,11 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(inputSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(inputSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const x = Math.ceil(inputSize[2] / 4); // X dimension of the grid of workgroups to dispatchWorkgroups.
+        const y = Math.ceil(inputSize[1] / 4); // Y dimension of the grid of workgroups to dispatchWorkgroups.
         const z = Math.ceil(inputSize[0] / 4);
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
+        passEncoder.dispatchWorkgroups(x, y, z);
+        passEncoder.end();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
         freeGPUArray(unifbuffer);
@@ -627,11 +627,11 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatchWorkgroups.
+        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatchWorkgroups.
         const z = Math.ceil(matrixSize[0] / 4); 
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
+        passEncoder.dispatchWorkgroups(x, y, z);
+        passEncoder.end();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
         freeGPUArray(unifbuffer);
@@ -713,11 +713,11 @@ async function run_nn(input_elem, output_elem, status_elem, gpumem_elem, progres
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
-        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatch.
-        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatch.
+        const x = Math.ceil(matrixSize[2] / 4); // X dimension of the grid of workgroups to dispatchWorkgroups.
+        const y = Math.ceil(matrixSize[1] / 4); // Y dimension of the grid of workgroups to dispatchWorkgroups.
         const z = Math.ceil(matrixSize[0] / 4);
-        passEncoder.dispatch(x, y, z);
-        passEncoder.endPass();
+        passEncoder.dispatchWorkgroups(x, y, z);
+        passEncoder.end();
         const gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
 
