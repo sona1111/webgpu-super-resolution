@@ -3,9 +3,8 @@ WebGPU Image Super Resolution
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Final Project**
 
-* Paul (San) Jewell
-  * [LinkedIn](https://www.linkedin.com/in/paul-jewell-2aba7379), [work website](
-    https://www.biociphers.org/paul-jewell-lab-member), [personal website](https://gitlab.com/inklabapp), [twitter](https://twitter.com/inklabapp), etc.
+* Sanura Jewell
+  * [LinkedIn](https://www.linkedin.com/in/san-jewell-2aba7379/)
 * Tested on: Linux pop-os 5.11.0-7614-generic, i7-9750H CPU @ 2.60GHz 32GB, GeForce GTX 1650 Mobile / Max-Q 4GB
 
 * Yuxuan Zhu
