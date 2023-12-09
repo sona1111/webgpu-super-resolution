@@ -74,24 +74,25 @@
   
     const shaderModule = device.createShaderModule({
       code: `
-      [[block]] struct Matrix {
+      struct Matrix {
         size : vec4<f32>; // batch_size , channel_size , height , width
-        numbers: array<f32>;
+        numbers: array<f32>,
     };
     
-    [[block]] struct Array {
+    struct Array {
         size : f32; // channel_size
-        numbers : array<f32>; 
+        numbers : array<f32>,
     };
     
-    [[group(0), binding(0)]] var<storage, read> inputImage : Matrix;
-    [[group(0), binding(1)]] var<storage, read> inputKernel : Matrix;
-    [[group(0), binding(2)]] var<storage, read> inputBias : Array;
+    @group(0) @binding(0) var<storage, read> inputImage : Matrix;
+    @group(0) @binding(1) var<storage, read> inputKernel : Matrix;
+    @group(0) @binding(2) var<storage, read> inputBias : Array;
     [[group(0), binding(3)]] var<storage, write> resultImage : Matrix;
     
     
-    [[stage(compute), workgroup_size(4, 4, 4)]]
-    fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
+    @compute
+@workgroup_size(4, 4, 4)
+    fn main(@builtin(global_invocation_id) global_id: vec3u) {
         // Guard against out-of-bounds work group sizes.
         if (global_id.x >= u32(inputImage.size.w) || global_id.y >= u32(inputImage.size.z) || global_id.z >= u32(inputKernel.size.x)) {
             return;
