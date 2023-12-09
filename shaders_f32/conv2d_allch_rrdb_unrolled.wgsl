@@ -1,30 +1,31 @@
 
-[[block]] struct Array {
+struct Array {
 
-    numbers : array<f32>; 
+    numbers : array<f32>,
 };
 
 
-[[block]] struct UBO {
-  outputSizes: array<i32, 2>;
-  inputSizes: array<i32, 3>;
-  kernSizes: array<i32, 4>;
-  offsetw: u32;
-  offsetb: i32;
-  inputOffset: u32;
-  outputOffset: i32;
+struct UBO {
+  outputSizes: array<i32, 2>,
+  inputSizes: array<i32, 3>,
+  kernSizes: array<i32, 4>,
+  offsetw: u32,
+  offsetb: i32,
+  inputOffset: u32,
+  outputOffset: i32,
 };
 var<private> image_patch: array<f32,9>;
 var<private> kernel_patch: array<f32,9>;
-[[group(0), binding(0)]] var<storage, read> inputKernel : Array;
-[[group(0), binding(1)]] var<storage, read> inputBias : Array;
-[[group(0), binding(2)]] var<storage, read_write> resultImage : Array;
-[[group(0), binding(3)]] var<storage, read> ufs : UBO;
+@group(0) @binding(0) var<storage, read> inputKernel : Array;
+@group(0) @binding(1) var<storage, read> inputBias : Array;
+@group(0) @binding(2) var<storage, read_write> resultImage : Array;
+@group(0) @binding(3) var<storage, read> ufs : UBO;
 
 
 
-[[stage(compute), workgroup_size(4, 4, 4)]]
-fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
+@compute
+@workgroup_size(4, 4, 4)
+fn main(@builtin(global_invocation_id) global_id: vec3u) {
     // Guard against out-of-bounds work group sizes.
 
     if (global_id.x >= u32(ufs.outputSizes[0]) || global_id.y >= u32(ufs.outputSizes[1]) || global_id.z >= u32(ufs.kernSizes[0])) {
